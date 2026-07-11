@@ -1,3 +1,90 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-surface text-text-primary;
+  }
+
+  ::selection {
+    @apply bg-brand-500/20 text-accent-text;
+  }
+
+  * {
+    @apply border-border-subtle;
+  }
+}
+
+@layer utilities {
+  .scroll-reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  }
+
+  .scroll-reveal.revealed {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm
+           hover:bg-brand-600 active:scale-[0.97]
+           transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply bg-white text-text-secondary px-5 py-2.5 rounded-xl font-medium text-sm
+           border border-border-subtle
+           hover:bg-surface hover:text-text-primary
+           active:scale-[0.97] transition-all duration-200;
+  }
+
+  .btn-success {
+    @apply bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm
+           hover:bg-emerald-700 active:scale-[0.97] transition-all duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-white px-5 py-2.5 rounded-xl font-medium text-sm
+           hover:bg-red-700 active:scale-[0.97] transition-all duration-200;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+
+  .card {
+    @apply bg-white rounded-[14px] border border-border-subtle transition-all duration-200;
+  }
+
+  .card-hover {
+    @apply card hover:shadow-lg hover:-translate-y-0.5;
+  }
+
+  .input-field {
+    @apply w-full border border-border-subtle rounded-xl px-4 py-2.5 text-sm text-text-primary
+           focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500
+           transition-all duration-200 placeholder:text-text-placeholder;
+  }
+
+  .nav-link {
+    @apply px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all duration-200;
+  }
+
+  .nav-link-active {
+    @apply nav-link bg-accent-light text-accent-text;
+  }
+
+  .nav-link-inactive {
+    @apply nav-link text-text-secondary hover:text-text-primary hover:bg-surface;
+  }
+
+  .chip {
+    @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium;
+  }
+}
