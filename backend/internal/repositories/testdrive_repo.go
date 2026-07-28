@@ -31,26 +31,21 @@ func (r *TestDriveRepository) Update(td *models.TestDrive) error {
 
 func (r *TestDriveRepository) ListByClient(clientID uint) ([]models.TestDrive, error) {
 	var tds []models.TestDrive
-	err := r.db.Where("client_id = ?", clientID).Preload("Vehicle").Find(&tds).Error
+	err := r.db.Preload("Vehicle").Where("client_id = ?", clientID).Order("scheduled_at desc").Find(&tds).Error
 	return tds, err
 }
 
 func (r *TestDriveRepository) ListAll() ([]models.TestDrive, error) {
 	var tds []models.TestDrive
-	err := r.db.Preload("Client").Preload("Vehicle").Find(&tds).Error
+	err := r.db.Preload("Client").Preload("Vehicle").Order("scheduled_at desc").Find(&tds).Error
 	return tds, err
 }
 
 func (r *TestDriveRepository) HasOverlap(vehicleID uint, scheduledAt time.Time) (bool, error) {
-	startWindow := scheduledAt.Add(-1 * time.Hour)
-	endWindow := scheduledAt.Add(1 * time.Hour)
-
 	var count int64
 	err := r.db.Model(&models.TestDrive{}).
-		Where("vehicle_id = ? AND status NOT IN ? AND scheduled_at BETWEEN ? AND ?",
-			vehicleID, []string{"cancelado", "completado"}, startWindow, endWindow).
+		Where("vehicle_id = ? AND scheduled_at = ? AND status != ?", vehicleID, scheduledAt, models.TDStatusCancelled).
 		Count(&count).Error
-
 	return count > 0, err
 }
 
@@ -62,6 +57,8 @@ func (r *TestDriveRepository) GetTestDriveCount() (int64, error) {
 
 func (r *TestDriveRepository) GetScheduledCount() (int64, error) {
 	var count int64
-	err := r.db.Model(&models.TestDrive{}).Where("status = ?", models.TDStatusConfirmed).Count(&count).Error
+	err := r.db.Model(&models.TestDrive{}).
+		Where("status IN ?", []models.TestDriveStatus{models.TDStatusPending, models.TDStatusConfirmed}).
+		Count(&count).Error
 	return count, err
 }

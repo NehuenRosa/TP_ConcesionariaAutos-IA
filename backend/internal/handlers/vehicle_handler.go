@@ -99,10 +99,10 @@ func (h *VehicleHandler) List(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data":       vehicles,
-		"total":      total,
-		"page":       filter.Page,
-		"page_size":  filter.PageSize,
+		"data":      vehicles,
+		"total":     total,
+		"page":      filter.Page,
+		"page_size": filter.PageSize,
 	})
 }
 

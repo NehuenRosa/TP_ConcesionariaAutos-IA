@@ -18,6 +18,15 @@ func NewTestDriveService(testDriveRepo *repositories.TestDriveRepository, vehicl
 }
 
 func (s *TestDriveService) Create(clientID uint, req models.CreateTestDriveRequest) (*models.TestDrive, error) {
+	scheduledAt, err := time.Parse("2006-01-02T15:04", req.ScheduledAt)
+	if err != nil {
+		return nil, errors.New("formato de fecha invalido (yyyy-mm-ddThh:mm)")
+	}
+
+	if scheduledAt.Before(time.Now()) {
+		return nil, errors.New("la fecha debe ser futura")
+	}
+
 	vehicle, err := s.vehicleRepo.FindByID(req.VehicleID)
 	if err != nil {
 		return nil, errors.New("vehiculo no encontrado")
@@ -26,21 +35,12 @@ func (s *TestDriveService) Create(clientID uint, req models.CreateTestDriveReque
 		return nil, errors.New("el vehiculo no esta disponible")
 	}
 
-	scheduledAt, err := time.Parse(time.RFC3339, req.ScheduledAt)
-	if err != nil {
-		return nil, errors.New("formato de fecha invalido. Use ISO 8601")
-	}
-
-	if scheduledAt.Before(time.Now()) {
-		return nil, errors.New("la fecha debe ser futura")
-	}
-
 	overlap, err := s.testDriveRepo.HasOverlap(req.VehicleID, scheduledAt)
 	if err != nil {
 		return nil, err
 	}
 	if overlap {
-		return nil, errors.New("el horario seleccionado ya esta ocupado")
+		return nil, errors.New("ya existe un turno para ese horario")
 	}
 
 	td := &models.TestDrive{
@@ -67,6 +67,30 @@ func (s *TestDriveService) UpdateStatus(id uint, status models.TestDriveStatus) 
 	if err != nil {
 		return errors.New("turno no encontrado")
 	}
+
+	validTransitions := map[models.TestDriveStatus][]models.TestDriveStatus{
+		models.TDStatusPending:   {models.TDStatusConfirmed, models.TDStatusCancelled},
+		models.TDStatusConfirmed: {models.TDStatusCompleted, models.TDStatusCancelled},
+		models.TDStatusCancelled: {},
+		models.TDStatusCompleted: {},
+	}
+
+	allowed, ok := validTransitions[td.Status]
+	if !ok {
+		return errors.New("estado invalido")
+	}
+
+	valid := false
+	for _, s := range allowed {
+		if s == status {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return errors.New("transicion de estado no permitida")
+	}
+
 	td.Status = status
 	return s.testDriveRepo.Update(td)
 }

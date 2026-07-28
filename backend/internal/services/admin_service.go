@@ -52,10 +52,10 @@ func (s *AdminService) GetDashboard() (map[string]interface{}, error) {
 	}
 
 	return map[string]interface{}{
-		"vehiculos":            vehicleStats,
-		"consultas":            consultationStats,
-		"test_drives_totales":  testDriveCount,
+		"vehiculos":              vehicleStats,
+		"consultas":              consultationStats,
+		"test_drives_totales":    testDriveCount,
 		"test_drives_pendientes": scheduledTestDrives,
-		"reservas_activas":     activeReservations,
+		"reservas_activas":       activeReservations,
 	}, nil
 }

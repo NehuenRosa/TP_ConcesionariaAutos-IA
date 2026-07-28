@@ -49,6 +49,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Me(c *gin.Context) {
-	userID := c.GetUint("user_id")
-	c.JSON(http.StatusOK, gin.H{"user_id": userID, "role": c.GetString("role"), "email": c.GetString("email")})
+	c.JSON(http.StatusOK, gin.H{
+		"user_id": c.GetUint("user_id"),
+		"role":    c.GetString("role"),
+		"email":   c.GetString("email"),
+	})
 }

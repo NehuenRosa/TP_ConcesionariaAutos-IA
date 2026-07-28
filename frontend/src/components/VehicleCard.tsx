@@ -53,7 +53,7 @@ export function VehicleCard({ vehicle }: Props) {
           {formatPrice(vehicle.price)}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-1">
-          <span className="chip bg-surface text-surface-text">{vehicle.transmission}</span>
+          <span className="chip bg-surface text-surface-text capitalize">{vehicle.transmission}</span>
           <span className="chip bg-surface text-surface-text capitalize">{vehicle.fuel}</span>
           <span className="chip bg-surface text-surface-text capitalize">{vehicle.vehicle_type}</span>
         </div>
