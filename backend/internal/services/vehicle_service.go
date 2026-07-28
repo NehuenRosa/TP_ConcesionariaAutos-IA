@@ -32,6 +32,7 @@ func (s *VehicleService) Update(vehicle *models.Vehicle) error {
 		return errors.New("vehiculo no encontrado")
 	}
 	vehicle.CreatedAt = existing.CreatedAt
+	vehicle.Status = existing.Status
 	return s.vehicleRepo.Update(vehicle)
 }
 
