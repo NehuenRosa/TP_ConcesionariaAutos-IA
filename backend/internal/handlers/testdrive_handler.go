@@ -18,13 +18,14 @@ func NewTestDriveHandler(testDriveService *services.TestDriveService) *TestDrive
 }
 
 func (h *TestDriveHandler) Create(c *gin.Context) {
+	clientID := c.GetUint("user_id")
+
 	var req models.CreateTestDriveRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	clientID := c.GetUint("user_id")
 	td, err := h.testDriveService.Create(clientID, req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -66,7 +67,7 @@ func (h *TestDriveHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	if err := h.testDriveService.UpdateStatus(uint(id), req.Status); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

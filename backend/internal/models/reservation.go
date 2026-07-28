@@ -15,9 +15,9 @@ type Reservation struct {
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
 	ClientID  uint              `gorm:"not null;index" json:"client_id"`
-	Client    User              `gorm:"foreignKey:ClientID" json:"client,omitempty"`
+	Client    *User             `gorm:"foreignKey:ClientID" json:"client,omitempty"`
 	VehicleID uint              `gorm:"not null;index" json:"vehicle_id"`
-	Vehicle   Vehicle           `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
+	Vehicle   *Vehicle          `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
 	Status    ReservationStatus `gorm:"size:20;not null;default:activa" json:"status"`
 	Notes     string            `gorm:"type:text" json:"notes,omitempty"`
 }

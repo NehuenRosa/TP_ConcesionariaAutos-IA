@@ -5,9 +5,9 @@ import "time"
 type ConsultationStatus string
 
 const (
-	ConsultPending     ConsultationStatus = "pendiente"
-	ConsultInProgress  ConsultationStatus = "en_conversacion"
-	ConsultClosed      ConsultationStatus = "cerrada"
+	ConsultPending    ConsultationStatus = "pendiente"
+	ConsultInProgress ConsultationStatus = "en_conversacion"
+	ConsultClosed     ConsultationStatus = "cerrada"
 )
 
 type Consultation struct {
@@ -15,9 +15,9 @@ type Consultation struct {
 	CreatedAt  time.Time          `json:"created_at"`
 	UpdatedAt  time.Time          `json:"updated_at"`
 	ClientID   uint               `gorm:"not null;index" json:"client_id"`
-	Client     User               `gorm:"foreignKey:ClientID" json:"client,omitempty"`
+	Client     *User              `gorm:"foreignKey:ClientID" json:"client,omitempty"`
 	VehicleID  uint               `gorm:"not null;index" json:"vehicle_id"`
-	Vehicle    Vehicle            `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
+	Vehicle    *Vehicle           `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
 	Message    string             `gorm:"type:text;not null" json:"message"`
 	Status     ConsultationStatus `gorm:"size:20;not null;default:pendiente" json:"status"`
 	AssignedTo *uint              `gorm:"index" json:"assigned_to,omitempty"`
@@ -26,12 +26,12 @@ type Consultation struct {
 }
 
 type ConsultationResponse struct {
-	ID             uint         `gorm:"primaryKey" json:"id"`
-	CreatedAt      time.Time    `json:"created_at"`
-	ConsultationID uint         `gorm:"not null;index" json:"consultation_id"`
-	UserID         uint         `gorm:"not null" json:"user_id"`
-	User           User         `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	Message        string       `gorm:"type:text;not null" json:"message"`
+	ID             uint      `gorm:"primaryKey" json:"id"`
+	CreatedAt      time.Time `json:"created_at"`
+	ConsultationID uint      `gorm:"not null;index" json:"consultation_id"`
+	UserID         uint      `gorm:"not null" json:"user_id"`
+	User           *User     `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Message        string    `gorm:"type:text;not null" json:"message"`
 }
 
 type CreateConsultationRequest struct {

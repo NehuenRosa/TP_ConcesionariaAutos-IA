@@ -1,0 +1,32 @@
+schema: spec-driven
+
+context: |
+  Sistema de gestión integral para concesionaria de autos.
+
+  Stack: Go (Gin + GORM) + PostgreSQL + React (TypeScript + Vite + TailwindCSS) + Docker Compose.
+
+  Arquitectura backend en capas: Handler -> Service -> Repository -> GORM (DB).
+  Frontend con React Router, componentes por rol (admin/, seller/), AuthContext + Axios.
+
+  Dominio: concesionaria automotriz con catálogo de vehículos, consultas de clientes,
+  solicitudes de test drive, reservas, chatbot IA (LangChain + OpenAI), panel admin con
+  métricas, y CRUD de vehículos.
+
+  Roles: cliente (consulta catálogo, envía consultas, agenda test drives, reserva),
+  vendedor (gestiona consultas, turnos, reservas), administrador (ABM vehículos, dashboard).
+
+rules:
+  proposal:
+    - Incluir sección de "Contexto" explicando el problema
+    - Listar requisitos funcionales y no funcionales
+    - Especificar criterios de aceptación
+    - Mantener máximo 2 páginas
+  design:
+    - Incluir diagrama de arquitectura (ASCII)
+    - Detallar modelos de datos y relaciones
+    - Especificar endpoints y componentes UI
+    - Describir flujo de datos
+  tasks:
+    - Dividir en tareas de máximo 2 horas
+    - Cada tarea debe tener criterio de verificación
+    - Usar checkboxes para tracking

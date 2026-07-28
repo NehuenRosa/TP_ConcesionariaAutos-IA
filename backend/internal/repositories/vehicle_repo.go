@@ -113,9 +113,9 @@ func (r *VehicleRepository) GetStats() (map[string]interface{}, error) {
 	r.db.Model(&models.Vehicle{}).Where("status = ?", models.VehicleSold).Count(&sold)
 
 	return map[string]interface{}{
-		"total":       total,
-		"disponible":  available,
-		"reservado":   reserved,
-		"vendido":     sold,
+		"total":      total,
+		"disponible": available,
+		"reservado":  reserved,
+		"vendido":    sold,
 	}, nil
 }
