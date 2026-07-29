@@ -47,6 +47,12 @@
 - Estados: `pendiente`, `en_conversacion`, `cerrada`.
 - Cada consulta se vincula a un vehículo y un cliente.
 - El vendedor puede cambiar el estado y agregar respuestas.
+- El cliente puede ver sus consultas en `/mis-consultas` y responder en conversaciones activas.
+- Tanto el cliente (dueño) como el vendedor/admin pueden eliminar consultas.
+- **Notificaciones**: campo `has_unread_messages` para el vendedor, `has_unread_for_client` para el cliente. Se marcan como leídas al abrir el detalle.
+- **Badges en navbar**: el vendedor ve un badge con pendientes+no leídas en "Bandeja"; el cliente ve un badge con respuestas sin leer en "Mis Consultas". Polling cada 15s.
+- **Indicador visual**: punto rojo en el avatar de consultas con mensajes no leídos.
+- **Ordenamiento**: pendientes primero, luego no leídas, luego por fecha.
 
 ### Test Drives
 - Se validan contra superposición de horarios.

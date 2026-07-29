@@ -54,3 +54,37 @@ func (r *ConsultationRepository) GetConsultationCountByPeriod() (map[string]int6
 	r.db.Model(&models.Consultation{}).Count(&total)
 	return map[string]int64{"total": total}, nil
 }
+
+func (r *ConsultationRepository) CountPending() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Consultation{}).Where("status = ?", models.ConsultPending).Count(&count).Error
+	return count, err
+}
+
+func (r *ConsultationRepository) Delete(id uint) error {
+	return r.db.Delete(&models.Consultation{}, id).Error
+}
+
+func (r *ConsultationRepository) DeleteResponseByConsultation(consultationID uint) error {
+	return r.db.Where("consultation_id = ?", consultationID).Delete(&models.ConsultationResponse{}).Error
+}
+
+func (r *ConsultationRepository) MarkAsRead(id uint) error {
+	return r.db.Model(&models.Consultation{}).Where("id = ?", id).Update("has_unread_messages", false).Error
+}
+
+func (r *ConsultationRepository) MarkAsReadForClient(id uint) error {
+	return r.db.Model(&models.Consultation{}).Where("id = ?", id).Update("has_unread_for_client", false).Error
+}
+
+func (r *ConsultationRepository) CountUnreadForSeller() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Consultation{}).Where("has_unread_messages = ?", true).Count(&count).Error
+	return count, err
+}
+
+func (r *ConsultationRepository) CountUnreadForClient(clientID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Consultation{}).Where("client_id = ? AND has_unread_for_client = ?", clientID, true).Count(&count).Error
+	return count, err
+}

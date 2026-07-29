@@ -93,6 +93,7 @@
     @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium;
   }
 
+<<<<<<< Updated upstream
   .badge-green {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800;
   }
@@ -111,5 +112,35 @@
 
   .badge-gray {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800;
+=======
+  .badge-pendiente {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-amber-50 text-amber-700 border border-amber-200;
+  }
+
+  .badge-pendiente::before {
+    content: '';
+    @apply w-1.5 h-1.5 rounded-full bg-amber-500;
+  }
+
+  .badge-conversacion {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-blue-50 text-blue-700 border border-blue-200;
+  }
+
+  .badge-conversacion::before {
+    content: '';
+    @apply w-1.5 h-1.5 rounded-full bg-blue-500;
+  }
+
+  .badge-cerrada {
+    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold
+           bg-red-50 text-red-600 border border-red-200;
+  }
+
+  .badge-cerrada::before {
+    content: '';
+    @apply w-1.5 h-1.5 rounded-full bg-red-500;
+>>>>>>> Stashed changes
   }
 }

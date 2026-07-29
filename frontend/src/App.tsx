@@ -13,6 +13,7 @@ import { AdminDashboard } from './pages/admin/Dashboard'
 import { VehicleManagement } from './pages/admin/VehicleManagement'
 import { VehicleForm } from './pages/admin/VehicleForm'
 import { ConsultationInbox } from './pages/seller/ConsultationInbox'
+import { MyConsultations } from './pages/MyConsultations'
 import { TestDriveManagement } from './pages/seller/TestDriveManagement'
 import { ReservationManagement } from './pages/seller/ReservationManagement'
 
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/consultar/:id" element={<ContactSeller />} />
               <Route path="/test-drive/:id" element={<TestDriveRequest />} />
               <Route path="/reservar/:id" element={<ReserveVehicle />} />
+              <Route path="/mis-consultas" element={<MyConsultations />} />
             </Route>
 
             <Route element={<ProtectedRoute allowedRoles={['administrador']} />}>

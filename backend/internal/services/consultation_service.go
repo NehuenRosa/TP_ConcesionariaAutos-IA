@@ -62,6 +62,10 @@ func (s *ConsultationService) ListAll() ([]models.Consultation, error) {
 	return s.consultationRepo.ListAll()
 }
 
+func (s *ConsultationService) GetPendingCount() (int64, error) {
+	return s.consultationRepo.CountPending()
+}
+
 func (s *ConsultationService) AddResponse(consultationID, userID uint, message string) (*models.Consultation, error) {
 	consultation, err := s.consultationRepo.FindByID(consultationID)
 	if err != nil {
@@ -85,5 +89,65 @@ func (s *ConsultationService) AddResponse(consultationID, userID uint, message s
 		}
 	}
 
+	if consultation.Status == models.ConsultInProgress && consultation.AssignedTo != nil {
+		if userID == consultation.ClientID {
+			consultation.HasUnreadMessages = true
+			s.consultationRepo.Update(consultation)
+		} else if userID == *consultation.AssignedTo {
+			consultation.HasUnreadForClient = true
+			s.consultationRepo.Update(consultation)
+		}
+	}
+
 	return s.consultationRepo.FindByID(consultationID)
+}
+
+func (s *ConsultationService) Delete(id, userID uint, role string) error {
+	consultation, err := s.consultationRepo.FindByID(id)
+	if err != nil {
+		return errors.New("consulta no encontrada")
+	}
+
+	if role != string(models.RoleAdmin) && role != string(models.RoleSeller) && consultation.ClientID != userID {
+		return errors.New("no tienes permiso para eliminar esta consulta")
+	}
+
+	if err := s.consultationRepo.DeleteResponseByConsultation(id); err != nil {
+		return err
+	}
+
+	return s.consultationRepo.Delete(id)
+}
+
+func (s *ConsultationService) MarkAsRead(id uint) error {
+	return s.consultationRepo.MarkAsRead(id)
+}
+
+func (s *ConsultationService) MarkAsReadForClient(id uint) error {
+	return s.consultationRepo.MarkAsReadForClient(id)
+}
+
+func (s *ConsultationService) GetNotificationCounts(role string, userID uint) (map[string]int64, error) {
+	result := make(map[string]int64)
+	if role == string(models.RoleSeller) || role == string(models.RoleAdmin) {
+		pending, err := s.consultationRepo.CountPending()
+		if err != nil {
+			return nil, err
+		}
+		unread, err := s.consultationRepo.CountUnreadForSeller()
+		if err != nil {
+			return nil, err
+		}
+		result["pending"] = pending
+		result["unread"] = unread
+		result["total"] = pending + unread
+	} else {
+		unread, err := s.consultationRepo.CountUnreadForClient(userID)
+		if err != nil {
+			return nil, err
+		}
+		result["unread"] = unread
+		result["total"] = unread
+	}
+	return result, nil
 }

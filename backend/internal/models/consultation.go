@@ -11,18 +11,20 @@ const (
 )
 
 type Consultation struct {
-	ID         uint               `gorm:"primaryKey" json:"id"`
-	CreatedAt  time.Time          `json:"created_at"`
-	UpdatedAt  time.Time          `json:"updated_at"`
-	ClientID   uint               `gorm:"not null;index" json:"client_id"`
-	Client     *User              `gorm:"foreignKey:ClientID" json:"client,omitempty"`
-	VehicleID  uint               `gorm:"not null;index" json:"vehicle_id"`
-	Vehicle    *Vehicle           `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
-	Message    string             `gorm:"type:text;not null" json:"message"`
-	Status     ConsultationStatus `gorm:"size:20;not null;default:pendiente" json:"status"`
-	AssignedTo *uint              `gorm:"index" json:"assigned_to,omitempty"`
-	Seller     *User              `gorm:"foreignKey:AssignedTo" json:"seller,omitempty"`
-	Responses  []ConsultationResponse `gorm:"foreignKey:ConsultationID" json:"responses,omitempty"`
+	ID               uint               `gorm:"primaryKey" json:"id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	UpdatedAt        time.Time          `json:"updated_at"`
+	ClientID         uint               `gorm:"not null;index" json:"client_id"`
+	Client           *User              `gorm:"foreignKey:ClientID" json:"client,omitempty"`
+	VehicleID        uint               `gorm:"not null;index" json:"vehicle_id"`
+	Vehicle          *Vehicle           `gorm:"foreignKey:VehicleID" json:"vehicle,omitempty"`
+	Message          string             `gorm:"type:text;not null" json:"message"`
+	Status           ConsultationStatus `gorm:"size:20;not null;default:pendiente" json:"status"`
+	AssignedTo       *uint              `gorm:"index" json:"assigned_to,omitempty"`
+	Seller           *User              `gorm:"foreignKey:AssignedTo" json:"seller,omitempty"`
+	HasUnreadMessages  bool              `gorm:"default:false" json:"has_unread_messages"`
+	HasUnreadForClient bool              `gorm:"default:false" json:"has_unread_for_client"`
+	Responses          []ConsultationResponse `gorm:"foreignKey:ConsultationID" json:"responses,omitempty"`
 }
 
 type ConsultationResponse struct {

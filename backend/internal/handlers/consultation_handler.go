@@ -47,6 +47,14 @@ func (h *ConsultationHandler) GetByID(c *gin.Context) {
 		return
 	}
 
+	userID := c.GetUint("user_id")
+	role := c.GetString("role")
+	if role == string(models.RoleSeller) || role == string(models.RoleAdmin) {
+		h.consultationService.MarkAsRead(uint(id))
+	} else if consultation.ClientID == userID {
+		h.consultationService.MarkAsReadForClient(uint(id))
+	}
+
 	c.JSON(http.StatusOK, consultation)
 }
 
@@ -93,6 +101,43 @@ func (h *ConsultationHandler) ListAll(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": consultations})
+}
+
+func (h *ConsultationHandler) Delete(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalido"})
+		return
+	}
+
+	userID := c.GetUint("user_id")
+	role := c.GetString("role")
+	if err := h.consultationService.Delete(uint(id), userID, role); err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "consulta eliminada"})
+}
+
+func (h *ConsultationHandler) GetPendingCount(c *gin.Context) {
+	count, err := h.consultationService.GetPendingCount()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"count": count})
+}
+
+func (h *ConsultationHandler) GetNotificationCounts(c *gin.Context) {
+	role := c.GetString("role")
+	userID := c.GetUint("user_id")
+	counts, err := h.consultationService.GetNotificationCounts(role, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, counts)
 }
 
 func (h *ConsultationHandler) AddResponse(c *gin.Context) {

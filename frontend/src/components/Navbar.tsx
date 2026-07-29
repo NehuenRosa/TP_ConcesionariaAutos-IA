@@ -1,18 +1,32 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import api from '../services/api'
 
 export function Navbar() {
   const { isAuthenticated, user, logout, isAdmin, isSeller } = useAuth()
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [notifTotal, setNotifTotal] = useState(0)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10)
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const fetchCount = () => {
+      api.get('/consultations/notifications/count').then(({ data }) => {
+        setNotifTotal(data.total ?? 0)
+      }).catch(() => {})
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 15000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
 
   const isActive = (path: string) => location.pathname.startsWith(path)
 
@@ -47,9 +61,27 @@ export function Navbar() {
               {isSeller && (
                 <Link
                   to="/seller/consultas"
-                  className={isActive('/seller') ? 'nav-link-active' : 'nav-link-inactive'}
+                  className={`relative ${isActive('/seller') ? 'nav-link-active' : 'nav-link-inactive'}`}
                 >
                   Bandeja
+                  {notifTotal > 0 && (
+                    <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {notifTotal}
+                    </span>
+                  )}
+                </Link>
+              )}
+              {isAuthenticated && !isSeller && !isAdmin && (
+                <Link
+                  to="/mis-consultas"
+                  className={`relative ${isActive('/mis-consultas') ? 'nav-link-active' : 'nav-link-inactive'}`}
+                >
+                  Mis Consultas
+                  {notifTotal > 0 && (
+                    <span className="absolute -top-1.5 -right-3 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {notifTotal}
+                    </span>
+                  )}
                 </Link>
               )}
             </div>
@@ -108,8 +140,23 @@ export function Navbar() {
               </Link>
             )}
             {isSeller && (
-              <Link to="/seller/consultas" onClick={() => setMenuOpen(false)} className="block px-3 py-2 rounded-lg text-sm font-medium text-text-primary hover:bg-surface">
+              <Link to="/seller/consultas" onClick={() => setMenuOpen(false)} className="relative block px-3 py-2 rounded-lg text-sm font-medium text-text-primary hover:bg-surface">
                 Bandeja
+                {notifTotal > 0 && (
+                  <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center justify-center">
+                    {notifTotal}
+                  </span>
+                )}
+              </Link>
+            )}
+            {isAuthenticated && !isSeller && !isAdmin && (
+              <Link to="/mis-consultas" onClick={() => setMenuOpen(false)} className="relative block px-3 py-2 rounded-lg text-sm font-medium text-text-primary hover:bg-surface">
+                Mis Consultas
+                {notifTotal > 0 && (
+                  <span className="ml-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 inline-flex items-center justify-center">
+                    {notifTotal}
+                  </span>
+                )}
               </Link>
             )}
             {isAuthenticated ? (

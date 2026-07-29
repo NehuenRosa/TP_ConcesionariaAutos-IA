@@ -58,11 +58,14 @@
 | Message | text |
 | Status | enum: pendiente, en_conversacion, cerrada |
 | AssignedTo | *uint FK→User |
+| HasUnreadMessages | bool (default:false) |
+| HasUnreadForClient | bool (default:false) |
 
 ### ConsultationResponse
 | Campo | Tipo |
 |-------|------|
 | ID | uint pk |
+| CreatedAt | timestamp |
 | ConsultationID | uint FK |
 | UserID | uint FK |
 | Message | text |
@@ -107,9 +110,12 @@
 - POST /api/consultations → 201 (JWT)
 - GET /api/consultations/mine → 200 (JWT)
 - GET /api/consultations → 200 (JWT + seller/admin)
-- GET /api/consultations/:id → 200 (JWT)
+- GET /api/consultations/pending/count → 200 (JWT + seller/admin)
+- GET /api/consultations/notifications/count → 200 (JWT) — total según rol
+- GET /api/consultations/:id → 200 (JWT) — marca como leído según el rol
 - PATCH /api/consultations/:id/status → 200 (JWT + seller/admin)
 - POST /api/consultations/:id/responses → 200 (JWT)
+- DELETE /api/consultations/:id → 200 (JWT) — dueño o seller/admin
 
 ### Test Drives
 - POST /api/test-drives → 201 (JWT)
@@ -142,6 +148,7 @@
 | /login | Login | público |
 | /register | Register | público |
 | /consultar/:id | ContactSeller | cliente |
+| /mis-consultas | MyConsultations | cliente |
 | /test-drive/:id | TestDriveRequest | cliente |
 | /reservar/:id | ReserveVehicle | cliente |
 | /admin/dashboard | Dashboard | admin |

@@ -67,6 +67,8 @@ export interface Consultation {
   status: 'pendiente' | 'en_conversacion' | 'cerrada'
   assigned_to?: number
   seller?: User
+  has_unread_messages?: boolean
+  has_unread_for_client?: boolean
   responses?: ConsultationResponse[]
 }
 

@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
-import api from '../../services/api'
-import type { Consultation } from '../../types'
+import { Link } from 'react-router-dom'
+import api from '../services/api'
+import type { Consultation } from '../types'
 
-export function ConsultationInbox() {
+export function MyConsultations() {
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [selected, setSelected] = useState<Consultation | null>(null)
   const [responseText, setResponseText] = useState('')
   const [loading, setLoading] = useState(true)
 
   const load = () => {
-    api.get('/consultations').then(({ data }) => {
+    api.get('/consultations/mine').then(({ data }) => {
       setConsultations(data.data)
       setLoading(false)
     }).catch(() => setLoading(false))
@@ -18,17 +19,12 @@ export function ConsultationInbox() {
   useEffect(() => { load() }, [])
 
   const sorted = [...consultations].sort((a, b) => {
+    if (a.has_unread_for_client && !b.has_unread_for_client) return -1
+    if (!a.has_unread_for_client && b.has_unread_for_client) return 1
     if (a.status === 'pendiente' && b.status !== 'pendiente') return -1
     if (a.status !== 'pendiente' && b.status === 'pendiente') return 1
-    if (a.has_unread_messages && !b.has_unread_messages) return -1
-    if (!a.has_unread_messages && b.has_unread_messages) return 1
-    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
-
-  const handleStatusChange = async (id: number, status: string) => {
-    await api.patch(`/consultations/${id}/status`, { status })
-    load()
-  }
 
   const handleSendResponse = async () => {
     if (!selected || !responseText.trim()) return
@@ -73,7 +69,7 @@ export function ConsultationInbox() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Bandeja de Consultas</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Mis Consultas</h1>
         <p className="text-gray-500 mt-1">{consultations.length} consulta{consultations.length !== 1 ? 's' : ''}</p>
       </div>
 
@@ -86,8 +82,10 @@ export function ConsultationInbox() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
               </div>
-              <p className="text-gray-500 font-medium">No hay consultas</p>
-              <p className="text-gray-400 text-sm mt-1">Las consultas de los clientes aparecerán aquí</p>
+              <p className="text-gray-500 font-medium">No tenés consultas</p>
+              <p className="text-gray-400 text-sm mt-1">
+                <Link to="/catalogo" className="text-brand-600 hover:text-brand-700">Visitá el catálogo</Link> para consultar sobre un vehículo
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-50 max-h-[600px] overflow-y-auto">
@@ -96,30 +94,27 @@ export function ConsultationInbox() {
                   key={c.id}
                   onClick={() => {
                     setSelected(c)
-                    api.get(`/consultations/${c.id}`).then(({ data }) => {
-                      setSelected(data)
-                      load()
-                    })
+                    api.get(`/consultations/${c.id}`).then(({ data }) => setSelected(data))
                   }}
-                  className={`w-full text-left p-4 transition-colors duration-150 relative ${
+                  className={`w-full text-left p-4 transition-colors duration-150 ${
                     selected?.id === c.id ? 'bg-brand-50' : 'hover:bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="relative">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center flex-shrink-0">
                           <span className="text-xs font-bold text-white">
-                            {c.client?.name?.charAt(0).toUpperCase() || '?'}
+                            {c.vehicle?.brand?.charAt(0).toUpperCase() || '?'}
                           </span>
                         </div>
-                        {c.has_unread_messages && (
+                        {c.has_unread_for_client && (
                           <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 border-2 border-white rounded-full" />
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">{c.client?.name || 'Cliente'}</p>
-                        <p className="text-xs text-gray-400 truncate">{c.vehicle?.brand} {c.vehicle?.model}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{c.vehicle?.brand} {c.vehicle?.model}</p>
+                        <p className="text-xs text-gray-400 truncate">{c.vehicle?.year}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -147,60 +142,36 @@ export function ConsultationInbox() {
             <div className="card p-6 animate-fade-in">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center">
                     <span className="text-lg font-bold text-white">
-                      {selected.client?.name?.charAt(0).toUpperCase() || '?'}
+                      {selected.vehicle?.brand?.charAt(0).toUpperCase() || '?'}
                     </span>
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{selected.client?.name}</h2>
-                    <p className="text-sm text-gray-400">{selected.client?.email}</p>
+                    <h2 className="text-lg font-semibold text-gray-900">{selected.vehicle?.brand} {selected.vehicle?.model}</h2>
+                    <p className="text-sm text-gray-400">{selected.vehicle?.year}</p>
                   </div>
                 </div>
                 <span className={statusStyles[selected.status] || 'badge-gray'}>{statusLabels[selected.status] || selected.status}</span>
               </div>
 
-              <div className="bg-gray-50 rounded-xl p-4 mb-6">
-                <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-1">Vehículo</p>
-                <p className="text-sm font-medium text-gray-800">
-                  {selected.vehicle?.brand} {selected.vehicle?.model} ({selected.vehicle?.year})
-                </p>
-              </div>
-
               <div className="mb-6">
-                <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-2">Mensaje del cliente</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-2">Tu consulta inicial</p>
                 <div className="bg-brand-50 rounded-xl p-4">
                   <p className="text-sm text-gray-700">{selected.message}</p>
                 </div>
               </div>
 
-              {selected.status !== 'cerrada' && (
-                <div className="flex gap-2 mb-6">
-                  {selected.status === 'pendiente' && (
-                    <button onClick={() => handleStatusChange(selected.id, 'en_conversacion')} className="btn-primary btn-sm flex items-center gap-1.5">
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      Tomar consulta
-                    </button>
-                  )}
-                  <button onClick={() => handleStatusChange(selected.id, 'cerrada')} className="btn-secondary btn-sm flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    Cerrar consulta
-                  </button>
-                </div>
-              )}
-
               {selected.responses && selected.responses.length > 0 && (
                 <div className="mb-6">
-                  <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-3">Historial de respuestas</p>
+                  <p className="text-xs text-gray-400 uppercase tracking-wider font-medium mb-3">Conversación</p>
                   <div className="space-y-3">
                     {selected.responses.map((r) => (
                       <div key={r.id} className="bg-gray-50 rounded-xl p-4">
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-medium text-gray-500">{r.user?.name}</span>
+                          <span className="text-xs text-gray-300">•</span>
+                          <span className="text-xs text-gray-400">{new Date(r.created_at).toLocaleString('es-AR')}</span>
                         </div>
                         <p className="text-sm text-gray-700">{r.message}</p>
                       </div>
@@ -216,14 +187,14 @@ export function ConsultationInbox() {
                     <textarea
                       value={responseText}
                       onChange={(e) => setResponseText(e.target.value)}
-                      placeholder="Escribí tu respuesta..."
+                      placeholder="Escribí tu mensaje..."
                       rows={3}
                       className="input-field resize-none flex-1"
                     />
                     <button
                       onClick={handleSendResponse}
                       disabled={!responseText.trim()}
-                      className="btn-success btn-sm self-end flex items-center gap-1.5 disabled:opacity-50"
+                      className="btn-primary btn-sm self-end flex items-center gap-1.5 disabled:opacity-50"
                     >
                       <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5m0 0l-7 7m7-7l7 7" />
@@ -231,6 +202,12 @@ export function ConsultationInbox() {
                       Enviar
                     </button>
                   </div>
+                </div>
+              )}
+
+              {selected.status === 'cerrada' && (
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-gray-500">Esta consulta está cerrada.</p>
                 </div>
               )}
             </div>

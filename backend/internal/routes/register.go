@@ -47,9 +47,12 @@ func RegisterConsultationRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *config.C
 	api.POST("/consultations", auth, handler.Create)
 	api.GET("/consultations/mine", auth, handler.ListMy)
 	api.GET("/consultations", auth, sellerOnly, handler.ListAll)
+	api.GET("/consultations/pending/count", auth, sellerOnly, handler.GetPendingCount)
+	api.GET("/consultations/notifications/count", auth, handler.GetNotificationCounts)
 	api.GET("/consultations/:id", auth, handler.GetByID)
 	api.PATCH("/consultations/:id/status", auth, sellerOnly, handler.UpdateStatus)
 	api.POST("/consultations/:id/responses", auth, handler.AddResponse)
+	api.DELETE("/consultations/:id", auth, handler.Delete)
 }
 
 func RegisterTestDriveRoutes(api *gin.RouterGroup, db *gorm.DB, cfg *config.Config, auth gin.HandlerFunc) {
