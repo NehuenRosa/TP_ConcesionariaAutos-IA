@@ -116,7 +116,7 @@ docker exec tp_concesionariaautos-ia-db-1 psql -U postgres -c "CREATE DATABASE c
 
 | Servicio  | URL                           |
 |-----------|-------------------------------|
-| Frontend  | http://localhost:5173         |
+| Frontend  | http://localhost:5173 (dev) / http://localhost:5174 (docker) |
 | Backend   | http://localhost:8080         |
 | PostgreSQL| localhost:5433 (postgres/postgres) |
 

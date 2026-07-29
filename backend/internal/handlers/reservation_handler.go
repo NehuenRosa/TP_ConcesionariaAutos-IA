@@ -37,7 +37,7 @@ func (h *ReservationHandler) Create(c *gin.Context) {
 func (h *ReservationHandler) GetByID(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalido"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID inválido"})
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *ReservationHandler) GetByID(c *gin.Context) {
 func (h *ReservationHandler) Confirm(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalido"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID inválido"})
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *ReservationHandler) Confirm(c *gin.Context) {
 func (h *ReservationHandler) Cancel(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID invalido"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID inválido"})
 		return
 	}
 

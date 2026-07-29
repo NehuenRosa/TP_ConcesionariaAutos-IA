@@ -80,7 +80,9 @@ func (s *ConsultationService) AddResponse(consultationID, userID uint, message s
 
 	if consultation.Status == models.ConsultPending {
 		consultation.Status = models.ConsultInProgress
-		s.consultationRepo.Update(consultation)
+		if err := s.consultationRepo.Update(consultation); err != nil {
+			return nil, err
+		}
 	}
 
 	return s.consultationRepo.FindByID(consultationID)

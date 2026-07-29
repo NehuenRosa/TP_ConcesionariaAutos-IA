@@ -57,9 +57,14 @@ func (s *ReservationService) Confirm(id uint) (*models.Reservation, error) {
 		return nil, err
 	}
 
-	vehicle, _ := s.vehicleRepo.FindByID(reservation.VehicleID)
+	vehicle, err := s.vehicleRepo.FindByID(reservation.VehicleID)
+	if err != nil {
+		return nil, errors.New("vehiculo no encontrado")
+	}
 	vehicle.Status = models.VehicleSold
-	s.vehicleRepo.Update(vehicle)
+	if err := s.vehicleRepo.Update(vehicle); err != nil {
+		return nil, err
+	}
 
 	return s.reservationRepo.FindByID(id)
 }
@@ -75,9 +80,14 @@ func (s *ReservationService) Cancel(id uint) (*models.Reservation, error) {
 		return nil, err
 	}
 
-	vehicle, _ := s.vehicleRepo.FindByID(reservation.VehicleID)
+	vehicle, err := s.vehicleRepo.FindByID(reservation.VehicleID)
+	if err != nil {
+		return nil, errors.New("vehiculo no encontrado")
+	}
 	vehicle.Status = models.VehicleAvailable
-	s.vehicleRepo.Update(vehicle)
+	if err := s.vehicleRepo.Update(vehicle); err != nil {
+		return nil, err
+	}
 
 	return s.reservationRepo.FindByID(id)
 }

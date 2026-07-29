@@ -15,7 +15,7 @@ docker compose up -d
 Esto inicia 3 servicios:
 - **PostgreSQL** en `localhost:5433` (user: `postgres`, password: `postgres`, db: `concesionaria`)
 - **Backend** (Go/Gin) en `http://localhost:8080`
-- **Frontend** (React/Vite) en `http://localhost:5173`
+- **Frontend** (React/Vite) en `http://localhost:5173` (dev) / `http://localhost:5174` (docker)
 
 ## Credenciales de prueba
 
@@ -47,5 +47,5 @@ docker compose up -d --build backend
 docker compose down
 
 # Acceder a la base con psql
-docker exec -it tp_concesionariaautos-ia-db-1 psql -U postgres -d concesionaria
+docker compose exec db psql -U postgres -d concesionaria
 ```

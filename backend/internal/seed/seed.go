@@ -38,8 +38,12 @@ func Run(db *gorm.DB) {
 		{Brand: "Tesla", Model: "Model 3", Year: 2024, Price: 55000000, Mileage: 0, Fuel: models.FuelElectric, Transmission: models.TransmissionAutomatic, Condition: models.ConditionNew, Color: "Azul", Description: "Sedan electrico de alto rendimiento.", Images: pq.StringArray{"https://placehold.co/600x400?text=Tesla+Model3"}, Status: models.VehicleAvailable, VehicleType: "sedan"},
 		{Brand: "Toyota", Model: "Hilux", Year: 2023, Price: 40000000, Mileage: 5000, Fuel: models.FuelDiesel, Transmission: models.TransmissionAutomatic, Condition: models.ConditionUsed, Color: "Plata", Description: "Pickup full 4x4 con cubierta y proteccion de caja.", Images: pq.StringArray{"https://placehold.co/600x400?text=Toyota+Hilux"}, Status: models.VehicleAvailable, VehicleType: "pickup"},
 	}
-	for _, v := range vehicles {
-		vehicleRepo.Create(&v)
+	var count int64
+	db.Model(&models.Vehicle{}).Count(&count)
+	if count == 0 {
+		for _, v := range vehicles {
+			vehicleRepo.Create(&v)
+		}
 	}
 
 	log.Println("Seed data loaded successfully")

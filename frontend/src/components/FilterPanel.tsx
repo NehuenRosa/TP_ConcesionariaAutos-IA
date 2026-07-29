@@ -10,8 +10,12 @@ export function FilterPanel({ onFilter, brands }: Props) {
   const [filters, setFilters] = useState<VehicleFilter>({})
   const [showFilters, setShowFilters] = useState(false)
 
+  const numericKeys = ['price_from', 'price_to', 'year_from', 'year_to']
   const handleChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value || undefined }))
+    setFilters((prev) => ({
+      ...prev,
+      [key]: numericKeys.includes(key) ? (value ? Number(value) : undefined) : (value || undefined),
+    }))
   }
 
   const handleSubmit = (e: React.FormEvent) => {

@@ -21,7 +21,7 @@ export function VehicleCard({ vehicle }: Props) {
           <img
             src={vehicle.images[0]}
             alt={`${vehicle.brand} ${vehicle.model}`}
-            className="w-full h-full object-cover group-hover:scale-103 transition-transform duration-200 ease-out"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 ease-out"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

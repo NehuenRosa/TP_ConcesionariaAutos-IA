@@ -54,6 +54,11 @@
            hover:bg-red-700 active:scale-[0.97] transition-all duration-200;
   }
 
+  .btn-warning {
+    @apply bg-amber-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm
+           hover:bg-amber-600 active:scale-[0.97] transition-all duration-200;
+  }
+
   .btn-sm {
     @apply px-3 py-1.5 text-xs rounded-lg;
   }
@@ -86,5 +91,25 @@
 
   .chip {
     @apply inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800;
+  }
+
+  .badge-yellow {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800;
+  }
+
+  .badge-red {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
+  }
+
+  .badge-blue {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800;
+  }
+
+  .badge-gray {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800;
   }
 }

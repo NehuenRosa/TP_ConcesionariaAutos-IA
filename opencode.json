@@ -4,7 +4,7 @@
     "read": {
       "*": "allow",
       ".env": "deny",
-      ".env.*": "deny",
+      ".env.local": "deny",
       "backend/server.exe": "deny",
       "frontend/node_modules/**": "deny",
       "frontend/dist/**": "deny",

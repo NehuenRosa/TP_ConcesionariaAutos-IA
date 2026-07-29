@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (token) {
-      authService.me().catch(() => logout())
+      authService.me().then(setUser).catch(() => logout())
     }
   }, [])
 
