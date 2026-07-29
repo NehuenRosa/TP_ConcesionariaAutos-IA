@@ -70,6 +70,10 @@ func (s *AuthService) Login(req models.LoginRequest) (*models.AuthResponse, erro
 	return &models.AuthResponse{Token: token, User: *user}, nil
 }
 
+func (s *AuthService) GetUserByID(id uint) (*models.User, error) {
+	return s.userRepo.FindByID(id)
+}
+
 func (s *AuthService) generateToken(user *models.User) (string, error) {
 	claims := &middleware.Claims{
 		UserID: user.ID,
