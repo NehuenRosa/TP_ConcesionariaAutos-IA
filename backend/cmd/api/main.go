@@ -22,6 +22,11 @@ func main() {
 		return
 	}
 
+	if err := database.SembrarVehiculos(base); err != nil {
+		slog.Error("No se pudieron sembrar los vehículos por defecto", "error", err.Error())
+		return
+	}
+
 	if err := database.SembrarUsuarios(base); err != nil {
 		slog.Error("No se pudieron sembrar los usuarios por defecto", "error", err.Error())
 		return

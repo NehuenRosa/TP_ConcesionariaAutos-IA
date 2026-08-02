@@ -25,6 +25,7 @@ type Vehiculo struct {
 	Kilometraje int     `json:"kilometraje"`
 	Combustible string  `json:"combustible"`
 	Transmision string  `json:"transmision"`
+	Tipo        string  `json:"tipo"`
 	Precio      float64 `gorm:"not null" json:"precio"`
 	Condicion   string  `gorm:"not null" json:"condicion"`
 	Estado      string  `gorm:"not null;index;default:disponible" json:"estado"`

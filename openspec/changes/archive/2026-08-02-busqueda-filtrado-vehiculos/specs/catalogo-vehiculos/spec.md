@@ -1,12 +1,4 @@
-# Spec: catalogo-vehiculos
-
-## Purpose
-
-Exponer el stock de vehículos disponibles del concesionario al público, con un
-listado paginado y el detalle de cada unidad. Es la base de los casos de uso
-posteriores (consulta, reserva, test drive) que referencian un vehículo.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Listado paginado de vehículos disponibles
 

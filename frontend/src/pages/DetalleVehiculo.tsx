@@ -139,6 +139,12 @@ export function DetalleVehiculo() {
               <dd className="text-lg font-semibold text-gray-900">{vehiculo.transmision}</dd>
             </div>
             <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Tipo</dt>
+              <dd className="text-lg font-semibold text-gray-900">
+                {vehiculo.tipo ? vehiculo.tipo.charAt(0).toUpperCase() + vehiculo.tipo.slice(1) : '—'}
+              </dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
               <dt className="text-sm text-gray-500">Condición</dt>
               <dd className="text-lg font-semibold text-gray-900">
                 {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}

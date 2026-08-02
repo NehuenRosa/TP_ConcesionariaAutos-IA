@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -19,6 +20,7 @@ type VehiculoResumen struct {
 	Anio      int     `json:"anio"`
 	Precio    float64 `json:"precio"`
 	Condicion string  `json:"condicion"`
+	Tipo      string  `json:"tipo"`
 	Imagen    string  `json:"imagen"`
 }
 
@@ -40,14 +42,20 @@ func NuevoVehiculoHandler(servicio services.VehiculoService) *VehiculoHandler {
 	return &VehiculoHandler{servicio: servicio}
 }
 
-// Listar responde el catálogo paginado de vehículos disponibles.
+// Listar responde el catálogo paginado de vehículos disponibles, con búsqueda,
+// filtros combinables y ordenamiento opcionales.
 func (h *VehiculoHandler) Listar(c *gin.Context) {
 	pagina, tamano := parsearPaginacion(c)
-
-	vehiculos, total, err := h.servicio.ListarDisponibles(c.Request.Context(), pagina, tamano)
+	filtros, err := parsearFiltros(c)
 	if err != nil {
-		if errors.Is(err, services.ErrPaginacionInvalida) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Paginación inválida"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	vehiculos, total, err := h.servicio.ListarDisponibles(c.Request.Context(), filtros, pagina, tamano)
+	if err != nil {
+		if errors.Is(err, services.ErrPaginacionInvalida) || errors.Is(err, services.ErrFiltroInvalido) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo obtener el catálogo"})
@@ -107,6 +115,77 @@ func parsearPaginacion(c *gin.Context) (int, int) {
 	return pagina, tamano
 }
 
+// parsearFiltros lee los query params opcionales de búsqueda, filtros y
+// ordenamiento del catálogo. Devuelve un error con mensaje en español si algún
+// valor numérico no es válido.
+func parsearFiltros(c *gin.Context) (services.FiltrosBusqueda, error) {
+	filtros := services.FiltrosBusqueda{
+		Busqueda:       c.Query("busqueda"),
+		Marca:          c.Query("marca"),
+		Modelo:         c.Query("modelo"),
+		Tipo:           c.Query("tipo"),
+		Combustible:    c.Query("combustible"),
+		Condicion:      c.Query("condicion"),
+		OrdenPor:       c.Query("orden_por"),
+		OrdenDireccion: c.Query("orden_direccion"),
+	}
+
+	anioMin, err := parsearEnteroOpcional(c, "anio_min")
+	if err != nil {
+		return filtros, err
+	}
+	filtros.AnioMin = anioMin
+
+	anioMax, err := parsearEnteroOpcional(c, "anio_max")
+	if err != nil {
+		return filtros, err
+	}
+	filtros.AnioMax = anioMax
+
+	precioMin, err := parsearDecimalOpcional(c, "precio_min")
+	if err != nil {
+		return filtros, err
+	}
+	filtros.PrecioMin = precioMin
+
+	precioMax, err := parsearDecimalOpcional(c, "precio_max")
+	if err != nil {
+		return filtros, err
+	}
+	filtros.PrecioMax = precioMax
+
+	return filtros, nil
+}
+
+// parsearEnteroOpcional parsea un query param entero opcional. Si el parámetro
+// no está presente devuelve nil; si está y no es numérico devuelve error.
+func parsearEnteroOpcional(c *gin.Context, nombre string) (*int, error) {
+	valor := c.Query(nombre)
+	if valor == "" {
+		return nil, nil
+	}
+	numero, err := strconv.Atoi(valor)
+	if err != nil {
+		return nil, fmt.Errorf("parámetro %s inválido", nombre)
+	}
+	return &numero, nil
+}
+
+// parsearDecimalOpcional parsea un query param decimal opcional. Si el
+// parámetro no está presente devuelve nil; si está y no es numérico devuelve
+// error.
+func parsearDecimalOpcional(c *gin.Context, nombre string) (*float64, error) {
+	valor := c.Query(nombre)
+	if valor == "" {
+		return nil, nil
+	}
+	numero, err := strconv.ParseFloat(valor, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parámetro %s inválido", nombre)
+	}
+	return &numero, nil
+}
+
 // aResumen convierte un modelo en la ficha básica del listado. La imagen es la
 // primera de la galería, si existe.
 func aResumen(vehiculo models.Vehiculo) VehiculoResumen {
@@ -122,6 +201,7 @@ func aResumen(vehiculo models.Vehiculo) VehiculoResumen {
 		Anio:      vehiculo.Anio,
 		Precio:    vehiculo.Precio,
 		Condicion: vehiculo.Condicion,
+		Tipo:      vehiculo.Tipo,
 		Imagen:    imagen,
 	}
 }

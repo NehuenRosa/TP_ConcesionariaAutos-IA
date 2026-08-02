@@ -25,7 +25,14 @@ var (
 	ErrEstadoInvalido = errors.New("estado de vehículo inválido")
 	// ErrFiltroEstadoInvalido indica que el filtro de estado de la consulta no es válido.
 	ErrFiltroEstadoInvalido = errors.New("filtro de estado inválido")
+	// ErrFiltroInvalido indica que la búsqueda, un filtro o el ordenamiento
+	// solicitado en el catálogo no son válidos.
+	ErrFiltroInvalido = errors.New("filtro de búsqueda inválido")
 )
+
+// FiltrosBusqueda agrupa los criterios opcionales de búsqueda y filtrado del
+// catálogo público. Es el mismo tipo que usa el repositorio.
+type FiltrosBusqueda = repositories.FiltrosBusqueda
 
 // EntradaVehiculo es el conjunto de datos para crear o actualizar un vehículo.
 type EntradaVehiculo struct {
@@ -35,6 +42,7 @@ type EntradaVehiculo struct {
 	Kilometraje int
 	Combustible string
 	Transmision string
+	Tipo        string
 	Precio      float64
 	Condicion   string
 	Estado      string
@@ -43,7 +51,7 @@ type EntradaVehiculo struct {
 
 // VehiculoService define el contrato de la lógica de negocio de vehículos.
 type VehiculoService interface {
-	ListarDisponibles(ctx context.Context, pagina int, tamano int) ([]models.Vehiculo, int64, error)
+	ListarDisponibles(ctx context.Context, filtros FiltrosBusqueda, pagina int, tamano int) ([]models.Vehiculo, int64, error)
 	ObtenerPorID(ctx context.Context, id uint) (*models.Vehiculo, error)
 	ListarParaGestion(ctx context.Context, estado string, pagina int, tamano int) ([]models.Vehiculo, int64, error)
 	ObtenerParaGestion(ctx context.Context, id uint) (*models.Vehiculo, error)
@@ -62,13 +70,16 @@ func NuevoVehiculoService(repositorio repositories.VehiculoRepository) VehiculoS
 	return &vehiculoService{repositorio: repositorio}
 }
 
-// ListarDisponibles valida la paginación y delega en el repositorio el listado
-// de vehículos con estado "disponible".
-func (s *vehiculoService) ListarDisponibles(ctx context.Context, pagina int, tamano int) ([]models.Vehiculo, int64, error) {
+// ListarDisponibles valida la paginación y los filtros, y delega en el
+// repositorio el listado de vehículos con estado "disponible".
+func (s *vehiculoService) ListarDisponibles(ctx context.Context, filtros FiltrosBusqueda, pagina int, tamano int) ([]models.Vehiculo, int64, error) {
 	if pagina < 1 || tamano < 1 {
 		return nil, 0, ErrPaginacionInvalida
 	}
-	return s.repositorio.Listar(ctx, models.EstadoDisponible, pagina, tamano)
+	if err := validarFiltros(filtros); err != nil {
+		return nil, 0, err
+	}
+	return s.repositorio.Listar(ctx, models.EstadoDisponible, filtros, pagina, tamano)
 }
 
 // ObtenerPorID devuelve un vehículo solo si existe y está disponible.
@@ -167,6 +178,30 @@ func (s *vehiculoService) DarDeBaja(ctx context.Context, id uint) (*models.Vehic
 	return s.repositorio.ObtenerPorID(ctx, id)
 }
 
+// validarFiltros valida los criterios de búsqueda y ordenamiento del catálogo.
+func validarFiltros(filtros FiltrosBusqueda) error {
+	if filtros.AnioMin != nil && filtros.AnioMax != nil && *filtros.AnioMin > *filtros.AnioMax {
+		return ErrFiltroInvalido
+	}
+	if filtros.PrecioMin != nil && filtros.PrecioMax != nil && *filtros.PrecioMin > *filtros.PrecioMax {
+		return ErrFiltroInvalido
+	}
+	if filtros.Condicion != "" && filtros.Condicion != models.CondicionNuevo && filtros.Condicion != models.CondicionUsado {
+		return ErrFiltroInvalido
+	}
+	switch filtros.OrdenPor {
+	case "", "precio", "anio":
+	default:
+		return ErrFiltroInvalido
+	}
+	switch filtros.OrdenDireccion {
+	case "", "asc", "desc":
+	default:
+		return ErrFiltroInvalido
+	}
+	return nil
+}
+
 // validarEntrada valida los campos de la ficha técnica y el estado.
 func validarEntrada(entrada EntradaVehiculo) error {
 	if strings.TrimSpace(entrada.Marca) == "" || strings.TrimSpace(entrada.Modelo) == "" {
@@ -179,6 +214,9 @@ func validarEntrada(entrada EntradaVehiculo) error {
 		return ErrDatosVehiculoInvalidos
 	}
 	if entrada.Condicion != models.CondicionNuevo && entrada.Condicion != models.CondicionUsado {
+		return ErrDatosVehiculoInvalidos
+	}
+	if strings.TrimSpace(entrada.Tipo) == "" {
 		return ErrDatosVehiculoInvalidos
 	}
 	if entrada.Estado != "" && !esEstadoValido(entrada.Estado) {
@@ -214,6 +252,7 @@ func aModelo(entrada EntradaVehiculo, estado string) *models.Vehiculo {
 		Kilometraje: entrada.Kilometraje,
 		Combustible: entrada.Combustible,
 		Transmision: entrada.Transmision,
+		Tipo:        entrada.Tipo,
 		Precio:      entrada.Precio,
 		Condicion:   entrada.Condicion,
 		Estado:      estado,

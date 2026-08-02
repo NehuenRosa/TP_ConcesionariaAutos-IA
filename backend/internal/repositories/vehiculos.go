@@ -3,17 +3,37 @@ package repositories
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"concesionaria/backend/internal/models"
 
 	"gorm.io/gorm"
 )
 
+// FiltrosBusqueda agrupa los criterios opcionales de búsqueda y filtrado del
+// catálogo público. Los rangos usan punteros para distinguir "sin filtro" de
+// un valor cero.
+type FiltrosBusqueda struct {
+	Busqueda      string
+	Marca         string
+	Modelo        string
+	AnioMin       *int
+	AnioMax       *int
+	PrecioMin     *float64
+	PrecioMax     *float64
+	Tipo          string
+	Combustible   string
+	Condicion     string
+	OrdenPor      string
+	OrdenDireccion string
+}
+
 // VehiculoRepository define el acceso a datos de vehículos sobre GORM.
 type VehiculoRepository interface {
-	// Listar devuelve los vehículos que cumplen el estado indicado, paginados,
-	// junto con el total de registros que cumplen la condición.
-	Listar(ctx context.Context, estado string, pagina int, tamano int) ([]models.Vehiculo, int64, error)
+	// Listar devuelve los vehículos que cumplen el estado y los criterios de
+	// búsqueda indicados, paginados, junto con el total de registros que
+	// cumplen las condiciones.
+	Listar(ctx context.Context, estado string, filtros FiltrosBusqueda, pagina int, tamano int) ([]models.Vehiculo, int64, error)
 	// ListarParaGestion devuelve los vehículos paginados para la administración.
 	// Si estado está vacío incluye todos los estados; si no, filtra por el estado.
 	ListarParaGestion(ctx context.Context, estado string, pagina int, tamano int) ([]models.Vehiculo, int64, error)
@@ -38,20 +58,23 @@ func NuevoVehiculoRepository(base *gorm.DB) VehiculoRepository {
 	return &vehiculoRepository{base: base}
 }
 
-// Listar cuenta y devuelve la página solicitada de vehículos.
-func (r *vehiculoRepository) Listar(ctx context.Context, estado string, pagina int, tamano int) ([]models.Vehiculo, int64, error) {
+// Listar cuenta y devuelve la página solicitada de vehículos que cumplen el
+// estado y los criterios de búsqueda indicados.
+func (r *vehiculoRepository) Listar(ctx context.Context, estado string, filtros FiltrosBusqueda, pagina int, tamano int) ([]models.Vehiculo, int64, error) {
+	consulta := construirConsultaBusqueda(r.base.WithContext(ctx), filtros).
+		Where("estado = ?", estado)
+
 	var total int64
-	if err := r.base.WithContext(ctx).
-		Model(&models.Vehiculo{}).
-		Where("estado = ?", estado).
-		Count(&total).Error; err != nil {
+	if err := consulta.Model(&models.Vehiculo{}).Count(&total).Error; err != nil {
 		return nil, 0, fmt.Errorf("contar vehículos: %w", err)
 	}
 
+	columnaOrden, direccion := ordenPorDefecto(filtros)
+	consulta = consulta.Order(columnaOrden + " " + direccion)
+
 	var vehiculos []models.Vehiculo
-	err := r.base.WithContext(ctx).
+	err := consulta.
 		Model(&models.Vehiculo{}).
-		Where("estado = ?", estado).
 		Preload("Imagenes").
 		Offset((pagina - 1) * tamano).
 		Limit(tamano).
@@ -61,6 +84,74 @@ func (r *vehiculoRepository) Listar(ctx context.Context, estado string, pagina i
 	}
 
 	return vehiculos, total, nil
+}
+
+// construirConsultaBusqueda aplica a la consulta los criterios opcionales de
+// búsqueda y filtrado del catálogo.
+func construirConsultaBusqueda(consulta *gorm.DB, filtros FiltrosBusqueda) *gorm.DB {
+	if texto := strings.TrimSpace(filtros.Busqueda); texto != "" {
+		patron := "%" + escaparComodines(texto) + "%"
+		consulta = consulta.Where("marca ILIKE ? OR modelo ILIKE ?", patron, patron)
+	}
+	if filtros.Marca != "" {
+		consulta = consulta.Where("marca = ?", filtros.Marca)
+	}
+	if filtros.Modelo != "" {
+		consulta = consulta.Where("modelo = ?", filtros.Modelo)
+	}
+	if filtros.AnioMin != nil {
+		consulta = consulta.Where("anio >= ?", *filtros.AnioMin)
+	}
+	if filtros.AnioMax != nil {
+		consulta = consulta.Where("anio <= ?", *filtros.AnioMax)
+	}
+	if filtros.PrecioMin != nil {
+		consulta = consulta.Where("precio >= ?", *filtros.PrecioMin)
+	}
+	if filtros.PrecioMax != nil {
+		consulta = consulta.Where("precio <= ?", *filtros.PrecioMax)
+	}
+	if filtros.Tipo != "" {
+		consulta = consulta.Where("tipo = ?", filtros.Tipo)
+	}
+	if filtros.Combustible != "" {
+		consulta = consulta.Where("combustible = ?", filtros.Combustible)
+	}
+	if filtros.Condicion != "" {
+		consulta = consulta.Where("condicion = ?", filtros.Condicion)
+	}
+	return consulta
+}
+
+// ordenPorDefecto resuelve la columna y la dirección de ordenamiento con sus
+// valores por defecto (año descendente) y una lista blanca para evitar
+// inyección SQL por el parámetro de orden.
+func ordenPorDefecto(filtros FiltrosBusqueda) (string, string) {
+	columna := "anio"
+	switch filtros.OrdenPor {
+	case "precio":
+		columna = "precio"
+	case "anio":
+		columna = "anio"
+	}
+
+	direccion := "DESC"
+	switch strings.ToLower(filtros.OrdenDireccion) {
+	case "asc":
+		direccion = "ASC"
+	case "desc":
+		direccion = "DESC"
+	}
+	return columna, direccion
+}
+
+// escaparComodines neutraliza los caracteres comodín de ILIKE para que el
+// usuario busque literales.
+func escaparComodines(texto string) string {
+	texto = strings.ReplaceAll(texto, `\`, `\\`)
+	texto = strings.ReplaceAll(texto, `%`, `\%`)
+	texto = strings.ReplaceAll(texto, `_`, `\_`)
+	return texto
 }
 
 // ListarParaGestion cuenta y devuelve la página solicitada de vehículos para la

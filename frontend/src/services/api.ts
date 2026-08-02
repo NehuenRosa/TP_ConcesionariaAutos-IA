@@ -1,4 +1,5 @@
 import type {
+  FiltrosVehiculos,
   PaginaVehiculos,
   PaginaVehiculosGestion,
   Vehiculo,
@@ -71,8 +72,8 @@ export const api = {
       body: JSON.stringify(datos),
     }),
   obtenerPerfil: () => peticion<Usuario>('/auth/perfil'),
-  listarVehiculos: (pagina: number, tamano: number) =>
-    peticion<PaginaVehiculos>(`/vehiculos?pagina=${pagina}&tamano=${tamano}`),
+  listarVehiculos: (pagina: number, tamano: number, filtros?: FiltrosVehiculos) =>
+    peticion<PaginaVehiculos>(`/vehiculos?${construirConsultaVehiculos(pagina, tamano, filtros)}`),
   obtenerVehiculo: (id: number) => peticion<Vehiculo>(`/vehiculos/${id}`),
   listarVehiculosGestion: (pagina: number, tamano: number, estado?: string) =>
     peticion<PaginaVehiculosGestion>(
@@ -91,4 +92,41 @@ export const api = {
     }),
   darDeBajaVehiculo: (id: number) =>
     peticion<Vehiculo>(`/admin/vehiculos/${id}`, { method: 'DELETE' }),
+}
+
+// construirConsultaVehiculos arma la query string del catálogo público con
+// paginación y filtros opcionales, omitiendo los parámetros vacíos.
+function construirConsultaVehiculos(
+  pagina: number,
+  tamano: number,
+  filtros?: FiltrosVehiculos,
+): string {
+  const parametros = new URLSearchParams()
+  parametros.set('pagina', String(pagina))
+  parametros.set('tamano', String(tamano))
+
+  if (filtros) {
+    const mapeo: Array<[keyof FiltrosVehiculos, string]> = [
+      ['busqueda', 'busqueda'],
+      ['marca', 'marca'],
+      ['modelo', 'modelo'],
+      ['anioMin', 'anio_min'],
+      ['anioMax', 'anio_max'],
+      ['precioMin', 'precio_min'],
+      ['precioMax', 'precio_max'],
+      ['tipo', 'tipo'],
+      ['combustible', 'combustible'],
+      ['condicion', 'condicion'],
+      ['ordenPor', 'orden_por'],
+      ['ordenDireccion', 'orden_direccion'],
+    ]
+    for (const [campo, parametro] of mapeo) {
+      const valor = filtros[campo]
+      if (valor !== undefined && valor !== '' && valor !== null) {
+        parametros.set(parametro, String(valor))
+      }
+    }
+  }
+
+  return parametros.toString()
 }

@@ -5,6 +5,8 @@ import type { VehiculoEntrada, EstadoVehiculo } from '../types/vehiculo'
 
 const ESTADOS: EstadoVehiculo[] = ['disponible', 'reservado', 'vendido', 'dado_de_baja']
 
+const TIPOS = ['sedán', 'SUV', 'hatchback', 'pick-up', 'coupe']
+
 const ETIQUETAS_ESTADO: Record<EstadoVehiculo, string> = {
   disponible: 'Disponible',
   reservado: 'Reservado',
@@ -19,6 +21,7 @@ interface DatosFormulario {
   kilometraje: string
   combustible: string
   transmision: string
+  tipo: string
   precio: string
   condicion: string
   estado: EstadoVehiculo
@@ -33,6 +36,7 @@ function estadoVacio(): DatosFormulario {
     kilometraje: '0',
     combustible: '',
     transmision: '',
+    tipo: '',
     precio: '',
     condicion: 'nuevo',
     estado: 'disponible',
@@ -66,6 +70,7 @@ export function FormularioVehiculo() {
           kilometraje: String(vehiculo.kilometraje),
           combustible: vehiculo.combustible,
           transmision: vehiculo.transmision,
+          tipo: vehiculo.tipo,
           precio: String(vehiculo.precio),
           condicion: vehiculo.condicion,
           estado: vehiculo.estado,
@@ -101,6 +106,7 @@ export function FormularioVehiculo() {
       kilometraje: Number(datos.kilometraje) || 0,
       combustible: datos.combustible.trim(),
       transmision: datos.transmision.trim(),
+      tipo: datos.tipo,
       precio: Number(datos.precio),
       condicion: datos.condicion as VehiculoEntrada['condicion'],
       estado: datos.estado,
@@ -225,6 +231,25 @@ export function FormularioVehiculo() {
               onChange={(e) => actualizarCampo('transmision', e.target.value)}
               className={campo}
             />
+          </div>
+          <div>
+            <label htmlFor="tipo" className={etiqueta}>
+              Tipo de vehículo
+            </label>
+            <select
+              id="tipo"
+              required
+              value={datos.tipo}
+              onChange={(e) => actualizarCampo('tipo', e.target.value)}
+              className={campo}
+            >
+              <option value="">Seleccionar tipo</option>
+              {TIPOS.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="precio" className={etiqueta}>

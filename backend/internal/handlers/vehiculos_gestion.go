@@ -19,6 +19,7 @@ type VehiculoEntrada struct {
 	Kilometraje int      `json:"kilometraje"`
 	Combustible string   `json:"combustible"`
 	Transmision string   `json:"transmision"`
+	Tipo        string   `json:"tipo"`
 	Precio      float64  `json:"precio"`
 	Condicion   string   `json:"condicion"`
 	Estado      string   `json:"estado"`
@@ -189,6 +190,7 @@ func aEntrada(entrada VehiculoEntrada) services.EntradaVehiculo {
 		Kilometraje: entrada.Kilometraje,
 		Combustible: entrada.Combustible,
 		Transmision: entrada.Transmision,
+		Tipo:        entrada.Tipo,
 		Precio:      entrada.Precio,
 		Condicion:   entrada.Condicion,
 		Estado:      entrada.Estado,

@@ -15,6 +15,7 @@ export interface Vehiculo {
   kilometraje: number
   combustible: string
   transmision: string
+  tipo: string
   precio: number
   condicion: Condicion
   estado: EstadoVehiculo
@@ -28,6 +29,7 @@ export interface ResumenVehiculo {
   anio: number
   precio: number
   condicion: Condicion
+  tipo: string
   imagen: string
 }
 
@@ -45,10 +47,30 @@ export interface VehiculoEntrada {
   kilometraje: number
   combustible: string
   transmision: string
+  tipo: string
   precio: number
   condicion: Condicion
   estado: EstadoVehiculo
   imagenes: string[]
+}
+
+export type OrdenPorVehiculos = 'precio' | 'anio'
+
+export type OrdenDireccion = 'asc' | 'desc'
+
+export interface FiltrosVehiculos {
+  busqueda?: string
+  marca?: string
+  modelo?: string
+  anioMin?: number
+  anioMax?: number
+  precioMin?: number
+  precioMax?: number
+  tipo?: string
+  combustible?: string
+  condicion?: Condicion
+  ordenPor?: OrdenPorVehiculos
+  ordenDireccion?: OrdenDireccion
 }
 
 export interface ResumenVehiculoGestion {
