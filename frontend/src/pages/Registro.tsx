@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { ErrorApi } from '../services/api'
 
-export function InicioSesion() {
+export function Registro() {
   const navigate = useNavigate()
-  const ubicacion = useLocation()
-  const { iniciarSesion } = useAuth()
+  const { registrar } = useAuth()
+  const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -18,11 +18,10 @@ export function InicioSesion() {
     setError(null)
 
     try {
-      await iniciarSesion({ email, password })
-      const desde = (ubicacion.state as { desde?: { pathname?: string } } | null)?.desde
-      navigate(desde?.pathname ?? '/')
+      await registrar({ nombre, email, password })
+      navigate('/')
     } catch (e: unknown) {
-      setError(e instanceof ErrorApi ? e.message : 'No se pudo iniciar sesión.')
+      setError(e instanceof ErrorApi ? e.message : 'No se pudo crear la cuenta.')
       setEnviando(false)
     }
   }
@@ -34,13 +33,29 @@ export function InicioSesion() {
   return (
     <div className="mx-auto max-w-md space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Iniciar sesión</h1>
-        <p className="mt-1 text-gray-700">Ingresá tus credenciales para continuar.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Crear cuenta</h1>
+        <p className="mt-1 text-gray-700">
+          Registrate para consultar, reservar y pedir test drives.
+        </p>
       </div>
 
       {error && <p className="text-red-600">{error}</p>}
 
       <form onSubmit={enviar} className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
+        <div>
+          <label htmlFor="nombre" className={etiqueta}>
+            Nombre
+          </label>
+          <input
+            id="nombre"
+            type="text"
+            required
+            autoComplete="name"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            className={campo}
+          />
+        </div>
         <div>
           <label htmlFor="email" className={etiqueta}>
             Email
@@ -63,11 +78,13 @@ export function InicioSesion() {
             id="password"
             type="password"
             required
-            autoComplete="current-password"
+            minLength={8}
+            autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={campo}
           />
+          <p className="mt-1 text-xs text-gray-500">Debe tener al menos 8 caracteres.</p>
         </div>
 
         <button
@@ -75,14 +92,14 @@ export function InicioSesion() {
           disabled={enviando}
           className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {enviando ? 'Ingresando…' : 'Ingresar'}
+          {enviando ? 'Creando cuenta…' : 'Registrarme'}
         </button>
       </form>
 
       <p className="text-center text-sm text-gray-700">
-        ¿No tenés cuenta?{' '}
-        <Link to="/registro" className="text-gray-900 underline hover:text-gray-700">
-          Registrate
+        ¿Ya tenés cuenta?{' '}
+        <Link to="/login" className="text-gray-900 underline hover:text-gray-700">
+          Iniciá sesión
         </Link>
       </p>
     </div>

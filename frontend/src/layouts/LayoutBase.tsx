@@ -1,6 +1,9 @@
 import { Link, Outlet } from 'react-router'
+import { useAuth } from '../hooks/useAuth'
 
 export function LayoutBase() {
+  const { usuario, cargando, cerrarSesion, esAdministrador } = useAuth()
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-gray-200 bg-white">
@@ -12,15 +15,36 @@ export function LayoutBase() {
             <Link to="/catalogo" className="text-sm text-gray-700 hover:text-gray-900">
               Catálogo
             </Link>
-            <Link to="/admin" className="text-sm text-gray-700 hover:text-gray-900">
-              Administración
-            </Link>
-            <Link
-              to="/login"
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
-            >
-              Iniciar sesión
-            </Link>
+            {esAdministrador && (
+              <Link to="/admin" className="text-sm text-gray-700 hover:text-gray-900">
+                Administración
+              </Link>
+            )}
+            {!cargando && usuario && (
+              <>
+                <span className="text-sm text-gray-700">Hola, {usuario.nombre}</span>
+                <button
+                  type="button"
+                  onClick={cerrarSesion}
+                  className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Cerrar sesión
+                </button>
+              </>
+            )}
+            {!cargando && !usuario && (
+              <>
+                <Link to="/registro" className="text-sm text-gray-700 hover:text-gray-900">
+                  Registrarse
+                </Link>
+                <Link
+                  to="/login"
+                  className="rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-gray-700"
+                >
+                  Iniciar sesión
+                </Link>
+              </>
+            )}
           </div>
         </nav>
       </header>

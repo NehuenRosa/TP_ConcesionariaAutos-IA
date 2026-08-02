@@ -4,8 +4,10 @@ import type {
   Vehiculo,
   VehiculoEntrada,
 } from '../types/vehiculo'
+import type { DatosLogin, DatosRegistro, RespuestaLogin, Usuario } from '../types/usuario'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+const CLAVE_TOKEN = 'token_concesionaria'
 
 export class ErrorApi extends Error {
   constructor(
@@ -17,10 +19,24 @@ export class ErrorApi extends Error {
   }
 }
 
+export function obtenerToken(): string | null {
+  return localStorage.getItem(CLAVE_TOKEN)
+}
+
+export function guardarToken(token: string): void {
+  localStorage.setItem(CLAVE_TOKEN, token)
+}
+
+export function eliminarToken(): void {
+  localStorage.removeItem(CLAVE_TOKEN)
+}
+
 async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
+  const token = obtenerToken()
   const respuesta = await fetch(`${urlBase}${ruta}`, {
     headers: {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...opciones?.headers,
     },
     ...opciones,
@@ -44,6 +60,17 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
 
 export const api = {
   obtenerEstado: () => peticion<{ estado: string }>('/health'),
+  registrar: (datos: DatosRegistro) =>
+    peticion<Usuario>('/auth/registro', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  iniciarSesion: (datos: DatosLogin) =>
+    peticion<RespuestaLogin>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  obtenerPerfil: () => peticion<Usuario>('/auth/perfil'),
   listarVehiculos: (pagina: number, tamano: number) =>
     peticion<PaginaVehiculos>(`/vehiculos?pagina=${pagina}&tamano=${tamano}`),
   obtenerVehiculo: (id: number) => peticion<Vehiculo>(`/vehiculos/${id}`),

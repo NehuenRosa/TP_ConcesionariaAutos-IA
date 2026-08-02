@@ -21,9 +21,20 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	handlerVehiculos := handlers.NuevoVehiculoHandler(servicioVehiculos)
 	handlerGestionVehiculos := handlers.NuevoVehiculoGestionHandler(servicioVehiculos)
 
+	repositorioUsuarios := repositories.NuevoUsuarioRepository(base)
+	servicioAutenticacion := services.NuevoAutenticacionService(repositorioUsuarios, configuracion.JWTSecreto, services.DuracionToken)
+	handlerAutenticacion := handlers.NuevoAutenticacionHandler(servicioAutenticacion)
+
 	api := enrutador.Group("/api")
 	{
 		api.GET("/health", handlers.Salud)
+
+		autenticacion := api.Group("/auth")
+		{
+			autenticacion.POST("/registro", handlerAutenticacion.Registrar)
+			autenticacion.POST("/login", handlerAutenticacion.IniciarSesion)
+			autenticacion.GET("/perfil", middleware.AutenticacionJWT(configuracion.JWTSecreto), handlerAutenticacion.Perfil)
+		}
 
 		vehiculos := api.Group("/vehiculos")
 		{

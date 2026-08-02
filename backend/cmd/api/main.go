@@ -22,6 +22,11 @@ func main() {
 		return
 	}
 
+	if err := database.SembrarUsuarios(base); err != nil {
+		slog.Error("No se pudieron sembrar los usuarios por defecto", "error", err.Error())
+		return
+	}
+
 	enrutador := router.Nuevo(base, configuracion)
 
 	slog.Info("API escuchando", "direccion", configuracion.Host+":"+configuracion.Puerto)
