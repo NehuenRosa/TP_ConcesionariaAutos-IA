@@ -19,6 +19,7 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	repositorioVehiculos := repositories.NuevoVehiculoRepository(base)
 	servicioVehiculos := services.NuevoVehiculoService(repositorioVehiculos)
 	handlerVehiculos := handlers.NuevoVehiculoHandler(servicioVehiculos)
+	handlerGestionVehiculos := handlers.NuevoVehiculoGestionHandler(servicioVehiculos)
 
 	api := enrutador.Group("/api")
 	{
@@ -28,6 +29,17 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		{
 			vehiculos.GET("", handlerVehiculos.Listar)
 			vehiculos.GET("/:id", handlerVehiculos.ObtenerDetalle)
+		}
+
+		gestionVehiculos := api.Group("/admin/vehiculos")
+		gestionVehiculos.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		gestionVehiculos.Use(middleware.ExigirRol("administrador"))
+		{
+			gestionVehiculos.GET("", handlerGestionVehiculos.Listar)
+			gestionVehiculos.GET("/:id", handlerGestionVehiculos.ObtenerDetalle)
+			gestionVehiculos.POST("", handlerGestionVehiculos.Crear)
+			gestionVehiculos.PUT("/:id", handlerGestionVehiculos.Actualizar)
+			gestionVehiculos.DELETE("/:id", handlerGestionVehiculos.DarDeBaja)
 		}
 	}
 

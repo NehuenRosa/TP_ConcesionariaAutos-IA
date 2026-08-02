@@ -1,4 +1,9 @@
-import type { PaginaVehiculos, Vehiculo } from '../types/vehiculo'
+import type {
+  PaginaVehiculos,
+  PaginaVehiculosGestion,
+  Vehiculo,
+  VehiculoEntrada,
+} from '../types/vehiculo'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 
@@ -42,4 +47,21 @@ export const api = {
   listarVehiculos: (pagina: number, tamano: number) =>
     peticion<PaginaVehiculos>(`/vehiculos?pagina=${pagina}&tamano=${tamano}`),
   obtenerVehiculo: (id: number) => peticion<Vehiculo>(`/vehiculos/${id}`),
+  listarVehiculosGestion: (pagina: number, tamano: number, estado?: string) =>
+    peticion<PaginaVehiculosGestion>(
+      `/admin/vehiculos?pagina=${pagina}&tamano=${tamano}${estado ? `&estado=${estado}` : ''}`,
+    ),
+  obtenerVehiculoGestion: (id: number) => peticion<Vehiculo>(`/admin/vehiculos/${id}`),
+  crearVehiculo: (datos: VehiculoEntrada) =>
+    peticion<Vehiculo>('/admin/vehiculos', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  actualizarVehiculo: (id: number, datos: VehiculoEntrada) =>
+    peticion<Vehiculo>(`/admin/vehiculos/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(datos),
+    }),
+  darDeBajaVehiculo: (id: number) =>
+    peticion<Vehiculo>(`/admin/vehiculos/${id}`, { method: 'DELETE' }),
 }

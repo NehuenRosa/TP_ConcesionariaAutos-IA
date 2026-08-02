@@ -37,3 +37,35 @@ export interface PaginaVehiculos {
   tamano: number
   total: number
 }
+
+export interface VehiculoEntrada {
+  marca: string
+  modelo: string
+  anio: number
+  kilometraje: number
+  combustible: string
+  transmision: string
+  precio: number
+  condicion: Condicion
+  estado: EstadoVehiculo
+  imagenes: string[]
+}
+
+export interface ResumenVehiculoGestion {
+  id: number
+  marca: string
+  modelo: string
+  anio: number
+  kilometraje: number
+  precio: number
+  condicion: Condicion
+  estado: EstadoVehiculo
+  imagen: string
+}
+
+export interface PaginaVehiculosGestion {
+  datos: ResumenVehiculoGestion[]
+  pagina: number
+  tamano: number
+  total: number
+}

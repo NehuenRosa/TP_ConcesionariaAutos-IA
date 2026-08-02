@@ -6,7 +6,7 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 | ID | Caso de uso | Estado |
 |----|-------------|--------|
 | CU-01 | Autenticación y roles (registro, login, JWT, 3 roles) | Pendiente |
-| CU-02 | Gestión de vehículos (ABM) | Pendiente |
+| CU-02 | Gestión de vehículos (ABM) | Implementado |
 | CU-03 | Catálogo público (listado paginado + detalle) | En planificación (change de ejemplo) |
 | CU-04 | Búsqueda y filtrado avanzado | Pendiente |
 | CU-05 | Consulta / cotización | Pendiente |
