@@ -21,8 +21,18 @@ export interface Vehiculo {
   imagenes: Imagen[]
 }
 
+export interface ResumenVehiculo {
+  id: number
+  marca: string
+  modelo: string
+  anio: number
+  precio: number
+  condicion: Condicion
+  imagen: string
+}
+
 export interface PaginaVehiculos {
-  datos: Vehiculo[]
+  datos: ResumenVehiculo[]
   pagina: number
   tamano: number
   total: number

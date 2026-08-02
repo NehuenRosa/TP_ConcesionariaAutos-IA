@@ -1,3 +1,5 @@
+import type { PaginaVehiculos, Vehiculo } from '../types/vehiculo'
+
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 
 export class ErrorApi extends Error {
@@ -37,4 +39,7 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
 
 export const api = {
   obtenerEstado: () => peticion<{ estado: string }>('/health'),
+  listarVehiculos: (pagina: number, tamano: number) =>
+    peticion<PaginaVehiculos>(`/vehiculos?pagina=${pagina}&tamano=${tamano}`),
+  obtenerVehiculo: (id: number) => peticion<Vehiculo>(`/vehiculos/${id}`),
 }

@@ -1,14 +1,152 @@
-import { useParams } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router'
+import { api, ErrorApi } from '../services/api'
+import type { Vehiculo } from '../types/vehiculo'
+
+function formatearPrecio(precio: number): string {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    maximumFractionDigits: 0,
+  }).format(precio)
+}
+
+function formatearKilometraje(kilometraje: number): string {
+  return new Intl.NumberFormat('es-AR').format(kilometraje)
+}
 
 export function DetalleVehiculo() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
+  const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null)
+  const [imagenActiva, setImagenActiva] = useState(0)
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!id) return
+    let cancelado = false
+    setCargando(true)
+    setError(null)
+    setImagenActiva(0)
+
+    api
+      .obtenerVehiculo(Number(id))
+      .then((dato) => {
+        if (cancelado) return
+        setVehiculo(dato)
+      })
+      .catch((e: unknown) => {
+        if (cancelado) return
+        setError(e instanceof ErrorApi ? e.message : 'Ocurrió un error inesperado al cargar el vehículo.')
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false)
+      })
+
+    return () => {
+      cancelado = true
+    }
+  }, [id])
+
+  if (cargando) {
+    return <p className="text-gray-700">Cargando vehículo…</p>
+  }
+
+  if (error || !vehiculo) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold text-gray-900">Vehículo no encontrado</h1>
+        <p className="text-gray-700">{error ?? 'El vehículo solicitado no existe o no está disponible.'}</p>
+        <Link
+          to="/catalogo"
+          className="inline-block rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-700"
+        >
+          Volver al catálogo
+        </Link>
+      </div>
+    )
+  }
+
+  const imagenes = vehiculo.imagenes ?? []
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Detalle del vehículo</h1>
-      <p className="text-gray-700">
-        El detalle del vehículo {id ?? ''} estará disponible al implementar el caso de uso CU-03.
-      </p>
+    <div className="space-y-8">
+      <Link to="/catalogo" className="text-sm text-gray-700 hover:text-gray-900">
+        ← Volver al catálogo
+      </Link>
+
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="space-y-4">
+          <div className="flex h-80 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+            {imagenes[imagenActiva] ? (
+              <img
+                src={imagenes[imagenActiva].url}
+                alt={`${vehiculo.marca} ${vehiculo.modelo}`}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-gray-500">Sin imagen</span>
+            )}
+          </div>
+
+          {imagenes.length > 1 && (
+            <div className="flex gap-2">
+              {imagenes.map((imagen, indice) => (
+                <button
+                  key={imagen.id}
+                  type="button"
+                  onClick={() => setImagenActiva(indice)}
+                  className={`h-16 w-24 overflow-hidden rounded-md border ${
+                    indice === imagenActiva ? 'border-gray-900' : 'border-gray-200'
+                  }`}
+                  aria-label={`Ver imagen ${indice + 1}`}
+                >
+                  <img src={imagen.url} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {vehiculo.marca} {vehiculo.modelo}
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              {vehiculo.anio} · {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
+            </p>
+            <p className="mt-4 text-3xl font-bold text-gray-900">{formatearPrecio(vehiculo.precio)}</p>
+          </div>
+
+          <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Año</dt>
+              <dd className="text-lg font-semibold text-gray-900">{vehiculo.anio}</dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Kilometraje</dt>
+              <dd className="text-lg font-semibold text-gray-900">
+                {formatearKilometraje(vehiculo.kilometraje)} km
+              </dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Combustible</dt>
+              <dd className="text-lg font-semibold text-gray-900">{vehiculo.combustible}</dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Transmisión</dt>
+              <dd className="text-lg font-semibold text-gray-900">{vehiculo.transmision}</dd>
+            </div>
+            <div className="rounded-lg border border-gray-200 p-4">
+              <dt className="text-sm text-gray-500">Condición</dt>
+              <dd className="text-lg font-semibold text-gray-900">
+                {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
     </div>
   )
 }

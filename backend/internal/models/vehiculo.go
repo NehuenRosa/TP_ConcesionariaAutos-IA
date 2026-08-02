@@ -18,19 +18,19 @@ const (
 
 // Vehiculo es la entidad de GORM que representa una unidad del concesionario.
 type Vehiculo struct {
-	ID          uint   `gorm:"primaryKey"`
-	Marca       string `gorm:"not null"`
-	Modelo      string `gorm:"not null"`
-	Anio        int    `gorm:"not null"`
-	Kilometraje int
-	Combustible string
-	Transmision string
-	Precio      float64 `gorm:"not null"`
-	Condicion   string  `gorm:"not null"`
-	Estado      string  `gorm:"not null;index;default:disponible"`
-	Imagenes    []Imagen
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID          uint    `gorm:"primaryKey" json:"id"`
+	Marca       string  `gorm:"not null" json:"marca"`
+	Modelo      string  `gorm:"not null" json:"modelo"`
+	Anio        int     `gorm:"not null" json:"anio"`
+	Kilometraje int     `json:"kilometraje"`
+	Combustible string  `json:"combustible"`
+	Transmision string  `json:"transmision"`
+	Precio      float64 `gorm:"not null" json:"precio"`
+	Condicion   string  `gorm:"not null" json:"condicion"`
+	Estado      string  `gorm:"not null;index;default:disponible" json:"estado"`
+	Imagenes    []Imagen `json:"imagenes"`
+	CreatedAt   time.Time `json:"-"`
+	UpdatedAt   time.Time `json:"-"`
 }
 
 // TableName define el nombre de la tabla en español.
@@ -40,10 +40,10 @@ func (Vehiculo) TableName() string {
 
 // Imagen es una URL asociada a un vehículo (galería del catálogo).
 type Imagen struct {
-	ID         uint `gorm:"primaryKey"`
-	VehiculoID uint `gorm:"not null;index"`
-	URL        string `gorm:"not null"`
-	CreatedAt  time.Time
+	ID         uint   `gorm:"primaryKey" json:"id"`
+	VehiculoID uint   `gorm:"not null;index" json:"-"`
+	URL        string `gorm:"not null" json:"url"`
+	CreatedAt  time.Time `json:"-"`
 }
 
 // TableName define el nombre de la tabla en español.
