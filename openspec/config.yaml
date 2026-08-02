@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  Sistema web de gestión para una concesionaria de autos.
+  Permite administrar el stock de vehículos, exhibirlos en un catálogo público
+  con búsqueda y filtros, gestionar consultas y reservas de clientes, coordinar
+  turnos de test drive y ofrecer un asistente conversacional (chatbot) que
+  responde preguntas sobre los vehículos disponibles.
+
+  Perfiles de usuario:
+  - Cliente / visitante: navega el catálogo, consulta, reserva y solicita test drives.
+  - Vendedor: gestiona consultas, reservas y turnos.
+  - Administrador: administra stock de vehículos, usuarios y métricas.
+
+  Stack:
+  - Backend: Go + Gin (HTTP) + GORM (ORM) + JWT. API REST.
+  - Frontend: React + Vite + TypeScript + React Router + TailwindCSS.
+  - Base de datos: PostgreSQL.
+  - Chatbot: LangChain (langchaingo en el backend Go), conectado a la API.
+  - Infra: Docker + Docker Compose.
+
+  Arquitectura backend por capas: handler (HTTP) → service (negocio) →
+  repository (GORM) → PostgreSQL. Los handlers no contienen lógica de negocio.
+
+  Reglas de negocio:
+  - Estados del vehículo: disponible, reservado, vendido y dado_de_baja.
+  - Solo los vehículos disponibles se muestran en el catálogo público.
+  - Los turnos de test drive no pueden superponerse para la misma unidad en la
+    misma fecha y franja horaria.
+  - Autorización basada en JWT con claims de rol.
+
+  Casos de uso: CU-01 Autenticación y roles, CU-02 Gestión de vehículos (ABM),
+  CU-03 Catálogo público, CU-04 Búsqueda y filtrado avanzado, CU-05 Consulta/
+  cotización, CU-06 Gestión de consultas, CU-07 Turno de test drive, CU-08
+  Reserva de vehículo, CU-09 Panel de administración, CU-10 Chatbot asistente.
+
+  Convenciones:
+  - Todo en español (código, variables, funciones, tipos, entidades, nombres de
+    archivos, comentarios, commits, mensajes de error y textos de UI).
+  - Solo las palabras reservadas y bibliotecas del lenguaje quedan en su idioma
+    original.
+  - Go: camelCase para variables y funciones, PascalCase para tipos exportados.
+  - TypeScript/React: camelCase para variables/funciones/props, PascalCase para
+    componentes y tipos. Archivos de componentes en PascalCase.tsx.
+  - Nombres de archivos/carpetas en español (ej. vehiculos.go, api.ts).
+  - Errores en Go: los services retornan error; los handlers responden con
+    código HTTP adecuado y cuerpo JSON {"error": "mensaje en español"}.
+  - Prohibido saltarse capas.
+
+  Backlog completo de casos de uso en docs/roadmap.md.
+
+rules:
+  proposal:
+    - Describir por qué se necesita el cambio y qué resuelve.
+    - Listar las capacidades nuevas o modificadas con identificadores kebab-case.
+    - Incluir el impacto sobre código, API y dependencias.
+  specs:
+    - Usar el formato WHEN/THEN para los escenarios.
+    - Cada requisito debe ser verificable.
+  design:
+    - Documentar decisiones técnicas y su justificación.
+    - Mencionar riesgos y trade-offs.
+  tasks:
+    - Dividir en tareas accionables y verificables.
+    - Agrupar tareas por área (backend, frontend, base de datos).
