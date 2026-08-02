@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: concesionaria-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BD_USUARIO:-concesionaria}
+      POSTGRES_PASSWORD: ${BD_PASSWORD:-concesionaria}
+      POSTGRES_DB: ${BD_NOMBRE:-concesionaria}
+    ports:
+      - "${BD_PUERTO:-5432}:5432"
+    volumes:
+      - datos-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${BD_USUARIO:-concesionaria} -d ${BD_NOMBRE:-concesionaria}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    container_name: concesionaria-backend
+    restart: unless-stopped
+    environment:
+      HOST_API: 0.0.0.0
+      PUERTO_API: ${PUERTO_API:-8080}
+      BD_HOST: postgres
+      BD_PUERTO: 5432
+      BD_USUARIO: ${BD_USUARIO:-concesionaria}
+      BD_PASSWORD: ${BD_PASSWORD:-concesionaria}
+      BD_NOMBRE: ${BD_NOMBRE:-concesionaria}
+      BD_SSL: disable
+      JWT_SECRETO: ${JWT_SECRETO:-cambiar-en-produccion}
+      CORS_ORIGENES: ${CORS_ORIGENES:-*}
+    ports:
+      - "${PUERTO_API:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api}
+    container_name: concesionaria-frontend
+    restart: unless-stopped
+    ports:
+      - "${PUERTO_FRONTEND:-5173}:80"
+    depends_on:
+      - backend
+
+volumes:
+  datos-postgres:

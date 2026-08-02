@@ -1,6 +1,9 @@
 # Etapa de compilación
 FROM node:24-alpine AS compilacion
 
+ARG VITE_API_URL=http://localhost:8080/api
+ENV VITE_API_URL=$VITE_API_URL
+
 WORKDIR /app
 
 COPY package.json package-lock.json* ./

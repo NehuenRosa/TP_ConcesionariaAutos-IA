@@ -33,10 +33,20 @@ type Vehiculo struct {
 	UpdatedAt   time.Time
 }
 
+// TableName define el nombre de la tabla en español.
+func (Vehiculo) TableName() string {
+	return "vehiculos"
+}
+
 // Imagen es una URL asociada a un vehículo (galería del catálogo).
 type Imagen struct {
 	ID         uint `gorm:"primaryKey"`
 	VehiculoID uint `gorm:"not null;index"`
 	URL        string `gorm:"not null"`
 	CreatedAt  time.Time
+}
+
+// TableName define el nombre de la tabla en español.
+func (Imagen) TableName() string {
+	return "imagenes"
 }
