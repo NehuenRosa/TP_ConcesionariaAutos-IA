@@ -94,6 +94,23 @@ Ver `.env.example`. Las principales:
 
 > En producción, cambiar siempre `JWT_SECRETO`.
 
+## Perfiles de prueba
+
+Al arrancar, el backend crea automáticamente dos cuentas por defecto (sembradas)
+para poder probar los distintos roles. Son credenciales de **desarrollo**; las
+reales se definirán más adelante.
+
+| Rol | Email | Contraseña |
+|-----|-------|------------|
+| Administrador | `administrador@concesionaria.local` | `Admin123!` |
+| Vendedor | `vendedor@concesionaria.local` | `Vendedor123!` |
+| Cliente | crear una en `/registro` | — |
+
+> El rol `cliente` no tiene cuenta sembrada a propósito: el registro público crea
+> siempre cuentas con ese rol. Ejemplo: registrarse en
+> `http://localhost:5173/registro` con cualquier email y una contraseña de al
+> menos 8 caracteres.
+
 ## Comandos útiles
 
 ### Backend (Go)
