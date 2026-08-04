@@ -223,6 +223,11 @@ Ver `.env.example`. Para levantar local, copiar a `.env` y ajustar.
 El backend requiere: conexión a PostgreSQL (`BD_*`), puerto (`PUERTO_API`) y
 secreto JWT (`JWT_SECRETO`). El frontend usa `VITE_API_URL` para apuntar a la API.
 
+El MCP de GitHub (configurado en `.opencode/opencode.json`) autentica con un
+PAT vía `{env:GITHUB_TOKEN}`. Como opencode resuelve las variables de entorno
+desde el proceso al iniciar, `GITHUB_TOKEN` debe estar seteado en la sesión
+(no basta con `.env`); se puede obtener con `gh auth token`.
+
 ## Notas de la plataforma
 
 - Trabajamos en **Windows (PowerShell 5.1)**. Los comandos de este archivo son
