@@ -9,8 +9,8 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 | CU-02 | Gestión de vehículos (ABM) | Implementado |
 | CU-03 | Catálogo público (listado paginado + detalle) | En planificación (change de ejemplo) |
 | CU-04 | Búsqueda y filtrado avanzado | Pendiente |
-| CU-05 | Consulta / cotización | Pendiente |
-| CU-06 | Gestión de consultas (bandeja del vendedor) | Pendiente |
+| CU-05 | Consulta / cotización | Implementado |
+| CU-06 | Gestión de consultas (bandeja del vendedor) | Implementado (junto con CU-05) |
 | CU-07 | Turno de test drive | Pendiente |
 | CU-08 | Reserva de vehículo | Pendiente |
 | CU-09 | Panel de administración (dashboard) | Pendiente |

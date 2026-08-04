@@ -10,6 +10,9 @@ import { AdminVehiculos } from '../pages/AdminVehiculos'
 import { FormularioVehiculo } from '../pages/FormularioVehiculo'
 import { NoEncontrada } from '../pages/NoEncontrada'
 import { RutaProtegida } from '../components/RutaProtegida'
+import { MisConsultas } from '../pages/MisConsultas'
+import { BandejaEntrada } from '../pages/BandejaEntrada'
+import { ChatVendedor } from '../pages/ChatVendedor'
 
 export function Rutas() {
   return (
@@ -49,6 +52,38 @@ export function Rutas() {
           element={
             <RutaProtegida rol="administrador">
               <FormularioVehiculo />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-consultas"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisConsultas />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-consultas/:id"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisConsultas />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/vendedor/bandeja"
+          element={
+            <RutaProtegida rol="vendedor">
+              <BandejaEntrada />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/vendedor/bandeja/:id"
+          element={
+            <RutaProtegida rol="vendedor">
+              <ChatVendedor />
             </RutaProtegida>
           }
         />
