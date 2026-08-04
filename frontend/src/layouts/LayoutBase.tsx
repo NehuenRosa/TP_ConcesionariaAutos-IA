@@ -1,8 +1,12 @@
 import { Link, Outlet } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
+import { useNotificaciones } from '../hooks/useNotificaciones'
 
 export function LayoutBase() {
   const { usuario, cargando, cerrarSesion, esAdministrador } = useAuth()
+  const esCliente = usuario?.rol === 'cliente'
+  const esVendedor = usuario?.rol === 'vendedor'
+  const tieneNotificaciones = useNotificaciones(!cargando && !!usuario)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -15,6 +19,22 @@ export function LayoutBase() {
             <Link to="/catalogo" className="text-sm text-gray-700 hover:text-gray-900">
               Catálogo
             </Link>
+            {esCliente && (
+              <Link to="/mis-consultas" className="relative text-sm text-gray-700 hover:text-gray-900">
+                Mis Consultas
+                {tieneNotificaciones && (
+                  <span className="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                )}
+              </Link>
+            )}
+            {esVendedor && (
+              <Link to="/vendedor/bandeja" className="relative text-sm text-gray-700 hover:text-gray-900">
+                Bandeja
+                {tieneNotificaciones && (
+                  <span className="absolute -right-2 -top-1 h-2.5 w-2.5 rounded-full bg-red-500" />
+                )}
+              </Link>
+            )}
             {esAdministrador && (
               <Link to="/admin" className="text-sm text-gray-700 hover:text-gray-900">
                 Administración

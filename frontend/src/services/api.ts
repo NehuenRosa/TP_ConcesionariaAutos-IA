@@ -6,6 +6,7 @@ import type {
   VehiculoEntrada,
 } from '../types/vehiculo'
 import type { DatosLogin, DatosRegistro, RespuestaLogin, Usuario } from '../types/usuario'
+import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 const CLAVE_TOKEN = 'token_concesionaria'
@@ -92,6 +93,38 @@ export const api = {
     }),
   darDeBajaVehiculo: (id: number) =>
     peticion<Vehiculo>(`/admin/vehiculos/${id}`, { method: 'DELETE' }),
+
+  // Consultas
+  crearConsulta: (datos: CrearConsulta) =>
+    peticion<ConsultaResumen>('/consultas', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  listarMisConsultas: () => peticion<ConsultaResumen[]>('/consultas/mis-consultas'),
+  listarBandeja: () => peticion<ConsultaResumen[]>('/consultas/bandeja'),
+  tomarConsulta: (id: number) =>
+    peticion<ConsultaResumen>(`/consultas/${id}/tomar`, { method: 'PUT' }),
+  cerrarConsulta: (id: number) =>
+    peticion<ConsultaResumen>(`/consultas/${id}/cerrar`, { method: 'PUT' }),
+  eliminarConsulta: (id: number) =>
+    peticion<void>(`/consultas/${id}`, { method: 'DELETE' }),
+
+  // Mensajes
+  enviarMensaje: (consultaId: number, contenido: string) =>
+    peticion<Mensaje>(`/consultas/${consultaId}/mensajes`, {
+      method: 'POST',
+      body: JSON.stringify({ contenido }),
+    }),
+  obtenerMensajes: (consultaId: number) =>
+    peticion<Mensaje[]>(`/consultas/${consultaId}/mensajes`),
+  obtenerMensajesNuevos: (consultaId: number, desde: string) =>
+    peticion<Mensaje[]>(`/consultas/${consultaId}/mensajes/nuevos?desde=${desde}`),
+  marcarComoLeidos: (consultaId: number) =>
+    peticion<void>(`/consultas/${consultaId}/mensajes/leidos`, { method: 'PUT' }),
+
+  // Notificaciones
+  obtenerContadorNotificaciones: () =>
+    peticion<{ contador: number }>('/notificaciones/contador'),
 }
 
 // construirConsultaVehiculos arma la query string del catálogo público con

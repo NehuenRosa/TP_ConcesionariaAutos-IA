@@ -25,6 +25,14 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioAutenticacion := services.NuevoAutenticacionService(repositorioUsuarios, configuracion.JWTSecreto, services.DuracionToken)
 	handlerAutenticacion := handlers.NuevoAutenticacionHandler(servicioAutenticacion)
 
+	repositorioConsultas := repositories.NuevoConsultaRepository(base)
+	repositorioMensajes := repositories.NuevoMensajeRepository(base)
+	servicioConsultas := services.NuevoConsultaService(repositorioConsultas, repositorioVehiculos)
+	servicioMensajes := services.NuevoMensajeService(repositorioMensajes, repositorioConsultas, servicioConsultas)
+	handlerConsultas := handlers.NuevoConsultaHandler(servicioConsultas, servicioMensajes)
+	handlerMensajes := handlers.NuevoMensajeHandler(servicioMensajes)
+	handlerNotificaciones := handlers.NuevoNotificacionHandler(servicioConsultas, servicioMensajes)
+
 	api := enrutador.Group("/api")
 	{
 		api.GET("/health", handlers.Salud)
@@ -51,6 +59,28 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 			gestionVehiculos.POST("", handlerGestionVehiculos.Crear)
 			gestionVehiculos.PUT("/:id", handlerGestionVehiculos.Actualizar)
 			gestionVehiculos.DELETE("/:id", handlerGestionVehiculos.DarDeBaja)
+		}
+
+		consultas := api.Group("/consultas")
+		consultas.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		{
+			consultas.POST("", handlerConsultas.Crear)
+			consultas.GET("/mis-consultas", handlerConsultas.ListarMisConsultas)
+			consultas.GET("/bandeja", handlerConsultas.ListarBandeja)
+			consultas.PUT("/:id/tomar", handlerConsultas.Tomar)
+			consultas.PUT("/:id/cerrar", handlerConsultas.Cerrar)
+			consultas.DELETE("/:id", handlerConsultas.Eliminar)
+
+			consultas.GET("/:id/mensajes", handlerMensajes.ObtenerMensajes)
+			consultas.GET("/:id/mensajes/nuevos", handlerMensajes.ObtenerNuevos)
+			consultas.POST("/:id/mensajes", handlerMensajes.Enviar)
+			consultas.PUT("/:id/mensajes/leidos", handlerMensajes.MarcarLeidos)
+		}
+
+		notificaciones := api.Group("/notificaciones")
+		notificaciones.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		{
+			notificaciones.GET("/contador", handlerNotificaciones.Contador)
 		}
 	}
 
