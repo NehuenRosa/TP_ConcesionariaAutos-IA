@@ -18,6 +18,12 @@ type UsuarioRepository interface {
 	ObtenerPorEmail(ctx context.Context, email string) (*models.Usuario, error)
 	// ObtenerPorID devuelve un usuario por su identificador.
 	ObtenerPorID(ctx context.Context, id uint) (*models.Usuario, error)
+	// Listar devuelve todos los usuarios ordenados por ID.
+	Listar(ctx context.Context) ([]models.Usuario, error)
+	// Actualizar persiste los cambios de un usuario existente.
+	Actualizar(ctx context.Context, usuario *models.Usuario) error
+	// Eliminar borra un usuario por su identificador.
+	Eliminar(ctx context.Context, id uint) error
 }
 
 // usuarioRepository implementa UsuarioRepository sobre GORM.
@@ -57,4 +63,33 @@ func (r *usuarioRepository) ObtenerPorID(ctx context.Context, id uint) (*models.
 		return nil, err
 	}
 	return &usuario, nil
+}
+
+// Listar devuelve todos los usuarios ordenados por ID.
+func (r *usuarioRepository) Listar(ctx context.Context) ([]models.Usuario, error) {
+	var usuarios []models.Usuario
+	if err := r.base.WithContext(ctx).
+		Order("id ASC").
+		Find(&usuarios).Error; err != nil {
+		return nil, fmt.Errorf("listar usuarios: %w", err)
+	}
+	return usuarios, nil
+}
+
+// Actualizar persiste los cambios del usuario.
+func (r *usuarioRepository) Actualizar(ctx context.Context, usuario *models.Usuario) error {
+	if err := r.base.WithContext(ctx).
+		Save(usuario).Error; err != nil {
+		return fmt.Errorf("actualizar usuario: %w", err)
+	}
+	return nil
+}
+
+// Eliminar borra un usuario por su identificador.
+func (r *usuarioRepository) Eliminar(ctx context.Context, id uint) error {
+	if err := r.base.WithContext(ctx).
+		Delete(&models.Usuario{}, id).Error; err != nil {
+		return fmt.Errorf("eliminar usuario: %w", err)
+	}
+	return nil
 }

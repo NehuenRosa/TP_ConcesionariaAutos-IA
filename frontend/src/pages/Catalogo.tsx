@@ -1,7 +1,14 @@
 import { useDeferredValue, useEffect, useState } from 'react'
-import { Link } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { FiltrosVehiculos, ResumenVehiculo } from '../types/vehiculo'
+import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
+import { TarjetaVehiculo } from '../components/ui/TarjetaVehiculo'
+import { ContenidoCargando } from '../components/ui/Spinner'
+import { MensajeError } from '../components/ui/MensajeError'
+import { Paginacion } from '../components/ui/Paginacion'
+import { EstadoVacio } from '../components/ui/EstadoVacio'
+import { CampoTexto, CampoSeleccion } from '../components/ui/Campo'
+import { Boton } from '../components/ui/Boton'
 
 const TAMANO_PAGINA = 12
 
@@ -44,7 +51,7 @@ function filtrosVacios(): DatosFiltros {
 }
 
 function aFiltrosConsulta(datos: DatosFiltros): FiltrosVehiculos {
-  const filtros: FiltrosVehiculos = {
+  return {
     busqueda: datos.busqueda.trim() || undefined,
     marca: datos.marca.trim() || undefined,
     modelo: datos.modelo.trim() || undefined,
@@ -58,15 +65,6 @@ function aFiltrosConsulta(datos: DatosFiltros): FiltrosVehiculos {
     ordenPor: datos.ordenPor,
     ordenDireccion: datos.ordenDireccion,
   }
-  return filtros
-}
-
-function formatearPrecio(precio: number): string {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  }).format(precio)
 }
 
 export function Catalogo() {
@@ -120,40 +118,30 @@ export function Catalogo() {
     setDatos(filtrosVacios())
   }
 
-  const campo =
-    'w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus:border-gray-900 focus:outline-none'
-  const etiqueta = 'block text-xs font-medium text-gray-600'
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Catálogo de vehículos</h1>
-        <p className="mt-1 text-gray-700">
-          Buscá y filtrá las unidades disponibles en nuestro concesionario.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <EncabezadoPagina
+        destacado="Colección 2026"
+        titulo="Catálogo de vehículos"
+        descripcion="Buscá y filtrá las unidades disponibles en nuestro concesionario."
+      />
 
       <form
         onSubmit={(e) => e.preventDefault()}
-        className="space-y-4 rounded-lg border border-gray-200 bg-white p-4"
+        className="mt-8 space-y-5 rounded-2xl border border-white/8 bg-carbono-850/50 p-6 backdrop-blur-sm"
       >
-        <div>
-          <label htmlFor="busqueda" className={etiqueta}>
-            Búsqueda por marca o modelo
-          </label>
-          <input
-            id="busqueda"
-            type="search"
-            value={datos.busqueda}
-            onChange={(e) => actualizar('busqueda', e.target.value)}
-            placeholder="Ej.: Corolla, Toyota…"
-            className={campo}
-          />
-        </div>
+        <CampoTexto
+          id="busqueda"
+          etiqueta="Búsqueda por marca o modelo"
+          type="search"
+          value={datos.busqueda}
+          onChange={(e) => actualizar('busqueda', e.target.value)}
+          placeholder="Ej.: Corolla, Toyota…"
+        />
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div>
-            <label htmlFor="marca" className={etiqueta}>
+            <label htmlFor="marca" className="etiqueta">
               Marca
             </label>
             <input
@@ -163,7 +151,7 @@ export function Catalogo() {
               value={datos.marca}
               onChange={(e) => actualizar('marca', e.target.value)}
               placeholder="Todas"
-              className={campo}
+              className="campo"
             />
             <datalist id="marcas-sugeridas">
               {MARCAS_SUGERIDAS.map((marca) => (
@@ -171,236 +159,156 @@ export function Catalogo() {
               ))}
             </datalist>
           </div>
-          <div>
-            <label htmlFor="modelo" className={etiqueta}>
-              Modelo
-            </label>
-            <input
-              id="modelo"
-              type="text"
-              value={datos.modelo}
-              onChange={(e) => actualizar('modelo', e.target.value)}
-              placeholder="Todos"
-              className={campo}
-            />
-          </div>
-          <div>
-            <label htmlFor="tipo" className={etiqueta}>
-              Tipo
-            </label>
-            <select
-              id="tipo"
-              value={datos.tipo}
-              onChange={(e) => actualizar('tipo', e.target.value)}
-              className={campo}
-            >
-              <option value="">Todos</option>
-              {TIPOS.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="combustible" className={etiqueta}>
-              Combustible
-            </label>
-            <select
-              id="combustible"
-              value={datos.combustible}
-              onChange={(e) => actualizar('combustible', e.target.value)}
-              className={campo}
-            >
-              <option value="">Todos</option>
-              {COMBUSTIBLES.map((combustible) => (
-                <option key={combustible} value={combustible}>
-                  {combustible}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="condicion" className={etiqueta}>
-              Condición
-            </label>
-            <select
-              id="condicion"
-              value={datos.condicion}
-              onChange={(e) => actualizar('condicion', e.target.value)}
-              className={campo}
-            >
-              <option value="">Todas</option>
-              <option value="nuevo">Nuevo</option>
-              <option value="usado">Usado</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="anio-min" className={etiqueta}>
-              Año desde
-            </label>
-            <input
-              id="anio-min"
-              type="number"
-              min={1900}
-              max={new Date().getFullYear() + 1}
-              value={datos.anioMin}
-              onChange={(e) => actualizar('anioMin', e.target.value)}
-              placeholder="Ej.: 2018"
-              className={campo}
-            />
-          </div>
-          <div>
-            <label htmlFor="anio-max" className={etiqueta}>
-              Año hasta
-            </label>
-            <input
-              id="anio-max"
-              type="number"
-              min={1900}
-              max={new Date().getFullYear() + 1}
-              value={datos.anioMax}
-              onChange={(e) => actualizar('anioMax', e.target.value)}
-              placeholder="Ej.: 2022"
-              className={campo}
-            />
-          </div>
-          <div>
-            <label htmlFor="precio-min" className={etiqueta}>
-              Precio mínimo
-            </label>
-            <input
-              id="precio-min"
-              type="number"
-              min={0}
-              value={datos.precioMin}
-              onChange={(e) => actualizar('precioMin', e.target.value)}
-              placeholder="Ej.: 10000000"
-              className={campo}
-            />
-          </div>
-          <div>
-            <label htmlFor="precio-max" className={etiqueta}>
-              Precio máximo
-            </label>
-            <input
-              id="precio-max"
-              type="number"
-              min={0}
-              value={datos.precioMax}
-              onChange={(e) => actualizar('precioMax', e.target.value)}
-              placeholder="Ej.: 30000000"
-              className={campo}
-            />
-          </div>
-          <div>
-            <label htmlFor="orden-por" className={etiqueta}>
-              Ordenar por
-            </label>
-            <select
-              id="orden-por"
-              value={datos.ordenPor}
-              onChange={(e) => actualizar('ordenPor', e.target.value)}
-              className={campo}
-            >
-              <option value="anio">Año</option>
-              <option value="precio">Precio</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="orden-direccion" className={etiqueta}>
-              Dirección
-            </label>
-            <select
-              id="orden-direccion"
-              value={datos.ordenDireccion}
-              onChange={(e) => actualizar('ordenDireccion', e.target.value)}
-              className={campo}
-            >
-              <option value="desc">Descendente</option>
-              <option value="asc">Ascendente</option>
-            </select>
-          </div>
+          <CampoTexto
+            id="modelo"
+            etiqueta="Modelo"
+            value={datos.modelo}
+            onChange={(e) => actualizar('modelo', e.target.value)}
+            placeholder="Todos"
+          />
+          <CampoSeleccion
+            id="tipo"
+            etiqueta="Tipo"
+            value={datos.tipo}
+            onChange={(e) => actualizar('tipo', e.target.value)}
+          >
+            <option value="">Todos</option>
+            {TIPOS.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+              </option>
+            ))}
+          </CampoSeleccion>
+          <CampoSeleccion
+            id="combustible"
+            etiqueta="Combustible"
+            value={datos.combustible}
+            onChange={(e) => actualizar('combustible', e.target.value)}
+          >
+            <option value="">Todos</option>
+            {COMBUSTIBLES.map((combustible) => (
+              <option key={combustible} value={combustible}>
+                {combustible}
+              </option>
+            ))}
+          </CampoSeleccion>
+          <CampoSeleccion
+            id="condicion"
+            etiqueta="Condición"
+            value={datos.condicion}
+            onChange={(e) => actualizar('condicion', e.target.value)}
+          >
+            <option value="">Todas</option>
+            <option value="nuevo">Nuevo</option>
+            <option value="usado">Usado</option>
+          </CampoSeleccion>
+          <CampoTexto
+            id="anio-min"
+            etiqueta="Año desde"
+            type="number"
+            min={1900}
+            max={new Date().getFullYear() + 1}
+            value={datos.anioMin}
+            onChange={(e) => actualizar('anioMin', e.target.value)}
+            placeholder="Ej.: 2018"
+          />
+          <CampoTexto
+            id="anio-max"
+            etiqueta="Año hasta"
+            type="number"
+            min={1900}
+            max={new Date().getFullYear() + 1}
+            value={datos.anioMax}
+            onChange={(e) => actualizar('anioMax', e.target.value)}
+            placeholder="Ej.: 2022"
+          />
+          <CampoTexto
+            id="precio-min"
+            etiqueta="Precio mínimo"
+            type="number"
+            min={0}
+            value={datos.precioMin}
+            onChange={(e) => actualizar('precioMin', e.target.value)}
+            placeholder="Ej.: 10000000"
+          />
+          <CampoTexto
+            id="precio-max"
+            etiqueta="Precio máximo"
+            type="number"
+            min={0}
+            value={datos.precioMax}
+            onChange={(e) => actualizar('precioMax', e.target.value)}
+            placeholder="Ej.: 30000000"
+          />
+          <CampoSeleccion
+            id="orden-por"
+            etiqueta="Ordenar por"
+            value={datos.ordenPor}
+            onChange={(e) => actualizar('ordenPor', e.target.value)}
+          >
+            <option value="anio">Año</option>
+            <option value="precio">Precio</option>
+          </CampoSeleccion>
+          <CampoSeleccion
+            id="orden-direccion"
+            etiqueta="Dirección"
+            value={datos.ordenDireccion}
+            onChange={(e) => actualizar('ordenDireccion', e.target.value)}
+          >
+            <option value="desc">Descendente</option>
+            <option value="asc">Ascendente</option>
+          </CampoSeleccion>
         </div>
 
-        {hayFiltros && (
-          <button
-            type="button"
-            onClick={limpiar}
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-          >
-            Limpiar filtros
-          </button>
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <p className="text-xs text-plata-500">{total} vehículo{total === 1 ? '' : 's'}</p>
+          {hayFiltros && (
+            <Boton variante="fantasma" tamano="sm" onClick={limpiar}>
+              Limpiar filtros
+            </Boton>
+          )}
+        </div>
       </form>
 
-      {cargando && <p className="text-gray-700">Cargando vehículos…</p>}
+      {cargando && <ContenidoCargando etiqueta="Cargando vehículos…" />}
 
-      {!cargando && error && <p className="text-red-600">{error}</p>}
+      {!cargando && error && (
+        <div className="mt-6">
+          <MensajeError>{error}</MensajeError>
+        </div>
+      )}
 
       {!cargando && !error && vehiculos.length === 0 && (
-        <p className="text-gray-700">
-          {hayFiltros
-            ? 'No hay vehículos que coincidan con los filtros aplicados.'
-            : 'No hay vehículos disponibles en este momento.'}
-        </p>
+        <div className="mt-8">
+          <EstadoVacio
+            titulo={hayFiltros ? 'Sin coincidencias' : 'Sin vehículos disponibles'}
+            descripcion={
+              hayFiltros
+                ? 'No hay vehículos que coincidan con los filtros aplicados. Probá ajustarlos.'
+                : 'No hay vehículos disponibles en este momento. Volvé pronto.'
+            }
+            accion={
+              hayFiltros ? (
+                <Boton variante="secundario" tamano="sm" onClick={limpiar}>
+                  Limpiar filtros
+                </Boton>
+              ) : undefined
+            }
+          />
+        </div>
       )}
 
       {!cargando && !error && vehiculos.length > 0 && (
         <>
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {vehiculos.map((vehiculo) => (
-              <Link
-                key={vehiculo.id}
-                to={`/catalogo/${vehiculo.id}`}
-                className="group overflow-hidden rounded-lg border border-gray-200 bg-white transition hover:shadow-md"
-              >
-                <div className="flex h-48 items-center justify-center bg-gray-100">
-                  {vehiculo.imagen ? (
-                    <img
-                      src={vehiculo.imagen}
-                      alt={`${vehiculo.marca} ${vehiculo.modelo}`}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm text-gray-500">Sin imagen</span>
-                  )}
-                </div>
-                <div className="space-y-1 p-4">
-                  <h2 className="text-lg font-semibold text-gray-900">
-                    {vehiculo.marca} {vehiculo.modelo}
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    {vehiculo.anio} · {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
-                    {vehiculo.tipo ? ` · ${vehiculo.tipo.charAt(0).toUpperCase() + vehiculo.tipo.slice(1)}` : ''}
-                  </p>
-                  <p className="text-lg font-bold text-gray-900">{formatearPrecio(vehiculo.precio)}</p>
-                </div>
-              </Link>
+              <TarjetaVehiculo key={vehiculo.id} vehiculo={vehiculo} />
             ))}
           </div>
 
-          <nav className="flex items-center justify-center gap-2" aria-label="Paginación">
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.max(1, p - 1))}
-              disabled={pagina <= 1}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <span className="px-2 text-sm text-gray-700">
-              Página {pagina} de {totalPaginas}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-              disabled={pagina >= totalPaginas}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          </nav>
+          <div className="mt-12">
+            <Paginacion pagina={pagina} totalPaginas={totalPaginas} cambiarPagina={setPagina} />
+          </div>
         </>
       )}
     </div>

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { ErrorApi } from '../services/api'
+import { Boton } from '../components/ui/Boton'
+import { CampoTexto } from '../components/ui/Campo'
+import { MensajeError } from '../components/ui/MensajeError'
 
 export function Registro() {
   const navigate = useNavigate()
@@ -26,82 +29,70 @@ export function Registro() {
     }
   }
 
-  const campo =
-    'w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-gray-900 focus:outline-none'
-  const etiqueta = 'block text-sm font-medium text-gray-700'
-
   return (
-    <div className="mx-auto max-w-md space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Crear cuenta</h1>
-        <p className="mt-1 text-gray-700">
-          Registrate para consultar, reservar y pedir test drives.
+    <div className="mx-auto max-w-md px-4 py-20 sm:px-6">
+      <div className="text-center">
+        <p className="mb-2 font-display text-xs font-semibold tracking-[0.3em] text-acento-400 uppercase">
+          Unite a Aurum Motors
         </p>
+        <h1 className="font-display text-3xl font-bold tracking-tight text-plata-100">Crear cuenta</h1>
+        <p className="mt-2 text-sm text-plata-400">Consultá, reservá y pedí test drives.</p>
       </div>
 
-      {error && <p className="text-red-600">{error}</p>}
+      <div className="mt-8 space-y-4">
+        {error && <MensajeError>{error}</MensajeError>}
 
-      <form onSubmit={enviar} className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
-        <div>
-          <label htmlFor="nombre" className={etiqueta}>
-            Nombre
-          </label>
-          <input
+        <form
+          onSubmit={enviar}
+          className="space-y-5 rounded-2xl border border-white/8 bg-carbono-850/60 p-6 shadow-luz backdrop-blur-sm"
+        >
+          <CampoTexto
             id="nombre"
+            etiqueta="Nombre"
             type="text"
             required
             autoComplete="name"
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            className={campo}
           />
-        </div>
-        <div>
-          <label htmlFor="email" className={etiqueta}>
-            Email
-          </label>
-          <input
+          <CampoTexto
             id="email"
+            etiqueta="Email"
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className={campo}
           />
-        </div>
-        <div>
-          <label htmlFor="password" className={etiqueta}>
-            Contraseña
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={campo}
-          />
-          <p className="mt-1 text-xs text-gray-500">Debe tener al menos 8 caracteres.</p>
-        </div>
+          <div>
+            <CampoTexto
+              id="password"
+              etiqueta="Contraseña"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-plata-500">Debe tener al menos 8 caracteres.</p>
+          </div>
 
-        <button
-          type="submit"
-          disabled={enviando}
-          className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {enviando ? 'Creando cuenta…' : 'Registrarme'}
-        </button>
-      </form>
+          <Boton type="submit" tamano="lg" className="w-full" disabled={enviando}>
+            {enviando ? 'Creando cuenta…' : 'Registrarme'}
+          </Boton>
+        </form>
 
-      <p className="text-center text-sm text-gray-700">
-        ¿Ya tenés cuenta?{' '}
-        <Link to="/login" className="text-gray-900 underline hover:text-gray-700">
-          Iniciá sesión
-        </Link>
-      </p>
+        <p className="text-center text-sm text-plata-400">
+          ¿Ya tenés cuenta?{' '}
+          <Link
+            to="/login"
+            className="font-semibold text-plata-100 underline-offset-4 hover:underline"
+          >
+            Iniciá sesión
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }

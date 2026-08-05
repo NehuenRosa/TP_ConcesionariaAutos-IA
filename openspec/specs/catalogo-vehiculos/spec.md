@@ -5,9 +5,7 @@
 Exponer el stock de vehículos disponibles del concesionario al público, con un
 listado paginado y el detalle de cada unidad. Es la base de los casos de uso
 posteriores (consulta, reserva, test drive) que referencian un vehículo.
-
 ## Requirements
-
 ### Requirement: Listado paginado de vehículos disponibles
 
 El sistema SHALL exponer un endpoint público `GET /api/vehiculos` que devuelva
@@ -96,7 +94,8 @@ y el panel de búsqueda, filtros y ordenamiento de la capacidad
 El sistema SHALL ofrecer una página pública de detalle en la ruta
 `/catalogo/:id` que muestre la ficha técnica del vehículo consumiendo el
 endpoint público `GET /api/vehiculos/:id`, incluida la presentación del tipo de
-vehículo.
+vehículo. Cuando el usuario autenticado es cliente, la página SHALL mostrar una
+acción para solicitar un test drive que enlace a la ruta `/catalogo/:id/test-drive`.
 
 #### Scenario: Acceso al detalle de un vehículo disponible
 
@@ -111,3 +110,16 @@ vehículo.
   inexistente o no disponible
 - **THEN** el sistema muestra un mensaje de error en español con un enlace para
   volver al catálogo
+
+#### Scenario: Acción de test drive para clientes
+
+- **WHEN** un cliente autenticado accede al detalle de un vehículo disponible
+- **THEN** el sistema muestra una acción de "solicitar test drive" que enlaza a
+  `/catalogo/:id/test-drive`
+
+#### Scenario: Sin acción de test drive para visitantes
+
+- **WHEN** un visitante no autenticado accede al detalle de un vehículo
+  disponible
+- **THEN** el sistema no muestra la acción de solicitar test drive
+

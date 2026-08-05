@@ -1,1 +1,96 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-display: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --color-carbono-950: #070709;
+  --color-carbono-900: #0b0c0f;
+  --color-carbono-850: #0f1115;
+  --color-carbono-800: #13161c;
+  --color-carbono-700: #1a1e26;
+  --color-carbono-600: #232833;
+  --color-carbono-500: #2e3440;
+  --color-carbono-400: #3d4452;
+  --color-carbono-300: #515a69;
+
+  --color-plata-100: #f5f5f4;
+  --color-plata-200: #e6e6e4;
+  --color-plata-300: #cbcbc8;
+  --color-plata-400: #a6a6a2;
+  --color-plata-500: #6f6f6c;
+  --color-plata-600: #4a4a48;
+
+  --color-acento-300: #f0d9a8;
+  --color-acento-400: #e3c077;
+  --color-acento-500: #d2a854;
+  --color-acento-600: #b08a3c;
+
+  --shadow-luz: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 40px rgba(0, 0, 0, 0.55);
+  --shadow-luz-fuerte: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 12px 60px rgba(0, 0, 0, 0.7);
+  --shadow-resaltado: 0 0 0 1px rgba(212, 168, 84, 0.35), 0 0 40px rgba(212, 168, 84, 0.12);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-carbono-950 font-sans text-plata-100 antialiased;
+    background-image: radial-gradient(1200px 600px at 80% -10%, rgba(212, 168, 84, 0.06), transparent 60%),
+      radial-gradient(1000px 500px at -10% 110%, rgba(255, 255, 255, 0.03), transparent 60%);
+  }
+
+  ::selection {
+    @apply bg-acento-500/30 text-plata-100;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0b0c0f;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #232833;
+    border-radius: 999px;
+    border: 2px solid #0b0c0f;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2e3440;
+  }
+}
+
+@layer components {
+  .etiqueta {
+    @apply mb-1.5 block font-display text-xs font-semibold tracking-[0.18em] text-plata-400 uppercase;
+  }
+
+  .campo {
+    @apply w-full rounded-lg border border-plata-600/50 bg-carbono-800/70 px-4 py-2.5 text-sm text-plata-100 placeholder-plata-500 outline-none transition focus:border-acento-500/70 focus:bg-carbono-800 focus:ring-2 focus:ring-acento-500/20;
+  }
+
+  .campo::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+  }
+
+  .campo[type='date'],
+  .campo[type='datetime-local'] {
+    color-scheme: dark;
+  }
+
+  select.campo option {
+    background-color: #13161c;
+    color: #f5f5f4;
+  }
+
+  .texto-numerico {
+    font-variant-numeric: tabular-nums;
+  }
+}

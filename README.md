@@ -96,7 +96,7 @@ Ver `.env.example`. Las principales:
 
 ## Perfiles de prueba
 
-Al arrancar, el backend crea automáticamente dos cuentas por defecto (sembradas)
+Al arrancar, el backend crea automáticamente tres cuentas por defecto (sembradas)
 para poder probar los distintos roles. Son credenciales de **desarrollo**; las
 reales se definirán más adelante.
 
@@ -104,10 +104,9 @@ reales se definirán más adelante.
 |-----|-------|------------|
 | Administrador | `administrador@concesionaria.local` | `Admin123!` |
 | Vendedor | `vendedor@concesionaria.local` | `Vendedor123!` |
-| Cliente | crear una en `/registro` | — |
+| Cliente | `cliente@concesionaria.local` | `Cliente123!` |
 
-> El rol `cliente` no tiene cuenta sembrada a propósito: el registro público crea
-> siempre cuentas con ese rol. Ejemplo: registrarse en
+> El rol `cliente` también se puede crear desde el registro público en
 > `http://localhost:5173/registro` con cualquier email y una contraseña de al
 > menos 8 caracteres.
 

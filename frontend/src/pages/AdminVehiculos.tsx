@@ -2,38 +2,22 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { ResumenVehiculoGestion, EstadoVehiculo } from '../types/vehiculo'
+import { Boton } from '../components/ui/Boton'
+import { CampoSeleccion } from '../components/ui/Campo'
+import { ContenidoCargando } from '../components/ui/Spinner'
+import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
+import { EstadoVacio } from '../components/ui/EstadoVacio'
+import { Paginacion } from '../components/ui/Paginacion'
+import {
+  estilosEstadoVehiculo,
+  etiquetasEstadoVehiculo,
+  EtiquetaEstado,
+} from '../components/ui/EtiquetaEstado'
+import { formatearKilometraje, formatearPrecio } from '../utils/formato'
 
 const TAMANO_PAGINA = 10
 
 const ESTADOS: EstadoVehiculo[] = ['disponible', 'reservado', 'vendido', 'dado_de_baja']
-
-const ETIQUETAS_ESTADO: Record<EstadoVehiculo, string> = {
-  disponible: 'Disponible',
-  reservado: 'Reservado',
-  vendido: 'Vendido',
-  dado_de_baja: 'Dado de baja',
-}
-
-function formatearPrecio(precio: number): string {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  }).format(precio)
-}
-
-function colorEstado(estado: EstadoVehiculo): string {
-  switch (estado) {
-    case 'disponible':
-      return 'bg-green-100 text-green-800'
-    case 'reservado':
-      return 'bg-amber-100 text-amber-800'
-    case 'vendido':
-      return 'bg-blue-100 text-blue-800'
-    case 'dado_de_baja':
-      return 'bg-gray-200 text-gray-600'
-  }
-}
 
 export function AdminVehiculos() {
   const navigate = useNavigate()
@@ -89,149 +73,142 @@ export function AdminVehiculos() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de vehículos</h1>
-          <p className="mt-1 text-gray-700">Administrá el stock del concesionario.</p>
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <EncabezadoPagina
+        destacado="Administración"
+        titulo="Gestión de vehículos"
+        descripcion="Administrá el stock del concesionario."
+        acciones={
+          <Boton>
+            <Link to="/admin/vehiculos/nuevo">+ Nuevo vehículo</Link>
+          </Boton>
+        }
+      />
+
+      <div className="mt-8 flex flex-wrap items-center gap-4">
+        <div className="w-56">
+          <CampoSeleccion
+            id="filtro-estado"
+            etiqueta="Filtrar por estado"
+            value={filtroEstado}
+            onChange={(e) => {
+              setPagina(1)
+              setFiltroEstado(e.target.value)
+            }}
+          >
+            <option value="">Todos</option>
+            {ESTADOS.map((estado) => (
+              <option key={estado} value={estado}>
+                {etiquetasEstadoVehiculo[estado]}
+              </option>
+            ))}
+          </CampoSeleccion>
         </div>
-        <Link
-          to="/admin/vehiculos/nuevo"
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700"
-        >
-          + Nuevo vehículo
-        </Link>
       </div>
 
-      <div className="flex items-center gap-2">
-        <label htmlFor="filtro-estado" className="text-sm text-gray-700">
-          Estado:
-        </label>
-        <select
-          id="filtro-estado"
-          value={filtroEstado}
-          onChange={(e) => {
-            setPagina(1)
-            setFiltroEstado(e.target.value)
-          }}
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
-        >
-          <option value="">Todos</option>
-          {ESTADOS.map((estado) => (
-            <option key={estado} value={estado}>
-              {ETIQUETAS_ESTADO[estado]}
-            </option>
-          ))}
-        </select>
-      </div>
+      {cargando && <ContenidoCargando etiqueta="Cargando vehículos…" />}
 
-      {cargando && <p className="text-gray-700">Cargando vehículos…</p>}
-
-      {!cargando && error && <p className="text-red-600">{error}</p>}
+      {!cargando && error && (
+        <div className="mt-6">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>
+        </div>
+      )}
 
       {!cargando && !error && vehiculos.length === 0 && (
-        <p className="text-gray-700">No hay vehículos para mostrar.</p>
+        <div className="mt-8">
+          <EstadoVacio
+            titulo="No hay vehículos para mostrar"
+            descripcion="Agregá tu primera unidad al stock para comenzar a vender."
+            accion={
+              <Boton>
+                <Link to="/admin/vehiculos/nuevo">+ Nuevo vehículo</Link>
+              </Boton>
+            }
+          />
+        </div>
       )}
 
       {!cargando && !error && vehiculos.length > 0 && (
         <>
-          <div className="overflow-x-auto rounded-lg border border-gray-200">
-            <table className="w-full text-left text-sm text-gray-700">
-              <thead className="border-b border-gray-200 bg-gray-50 text-gray-500">
-                <tr>
-                  <th className="px-4 py-3">Vehículo</th>
-                  <th className="px-4 py-3">Año</th>
-                  <th className="px-4 py-3">Km</th>
-                  <th className="px-4 py-3">Precio</th>
-                  <th className="px-4 py-3">Estado</th>
-                  <th className="px-4 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {vehiculos.map((vehiculo) => (
-                  <tr key={vehiculo.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-16 shrink-0 overflow-hidden rounded bg-gray-100">
-                          {vehiculo.imagen ? (
-                            <img
-                              src={vehiculo.imagen}
-                              alt={`${vehiculo.marca} ${vehiculo.modelo}`}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-full w-full items-center justify-center text-xs text-gray-400">
-                              Sin imagen
-                            </span>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-white/8 bg-carbono-850/50">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-white/8 bg-carbono-900/70 text-plata-500">
+                  <tr>
+                    <th className="px-5 py-3.5 font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Vehículo</th>
+                    <th className="px-5 py-3.5 font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Año</th>
+                    <th className="px-5 py-3.5 font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Km</th>
+                    <th className="px-5 py-3.5 font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Precio</th>
+                    <th className="px-5 py-3.5 font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Estado</th>
+                    <th className="px-5 py-3.5 text-right font-display text-[11px] font-semibold tracking-[0.15em] uppercase">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/6">
+                  {vehiculos.map((vehiculo) => (
+                    <tr key={vehiculo.id} className="transition-colors hover:bg-white/3">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-16 shrink-0 overflow-hidden rounded-lg border border-white/8 bg-carbono-900">
+                            {vehiculo.imagen ? (
+                              <img
+                                src={vehiculo.imagen}
+                                alt={`${vehiculo.marca} ${vehiculo.modelo}`}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-full w-full items-center justify-center text-xs text-plata-500">
+                                Sin imagen
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-plata-100">
+                              {vehiculo.marca} {vehiculo.modelo}
+                            </p>
+                            <p className="text-xs text-plata-500">
+                              {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-plata-300">{vehiculo.anio}</td>
+                      <td className="px-5 py-3.5 text-plata-300">{formatearKilometraje(vehiculo.kilometraje)}</td>
+                      <td className="texto-numerico px-5 py-3.5 font-medium text-plata-100">
+                        {formatearPrecio(vehiculo.precio)}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <EtiquetaEstado
+                          estado={vehiculo.estado}
+                          estilos={estilosEstadoVehiculo}
+                          etiqueta={etiquetasEstadoVehiculo[vehiculo.estado]}
+                        />
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-2">
+                          <Boton
+                            variante="secundario"
+                            tamano="sm"
+                            onClick={() => navigate(`/admin/vehiculos/${vehiculo.id}/editar`)}
+                          >
+                            Editar
+                          </Boton>
+                          {vehiculo.estado !== 'dado_de_baja' && (
+                            <Boton variante="peligro" tamano="sm" onClick={() => darDeBaja(vehiculo.id)}>
+                              Dar de baja
+                            </Boton>
                           )}
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {vehiculo.marca} {vehiculo.modelo}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">{vehiculo.anio}</td>
-                    <td className="px-4 py-3">{new Intl.NumberFormat('es-AR').format(vehiculo.kilometraje)}</td>
-                    <td className="px-4 py-3">{formatearPrecio(vehiculo.precio)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${colorEstado(vehiculo.estado)}`}
-                      >
-                        {ETIQUETAS_ESTADO[vehiculo.estado]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/admin/vehiculos/${vehiculo.id}/editar`)}
-                          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          Editar
-                        </button>
-                        {vehiculo.estado !== 'dado_de_baja' && (
-                          <button
-                            type="button"
-                            onClick={() => darDeBaja(vehiculo.id)}
-                            className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50"
-                          >
-                            Dar de baja
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <nav className="flex items-center justify-center gap-2" aria-label="Paginación">
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.max(1, p - 1))}
-              disabled={pagina <= 1}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Anterior
-            </button>
-            <span className="px-2 text-sm text-gray-700">
-              Página {pagina} de {totalPaginas}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
-              disabled={pagina >= totalPaginas}
-              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Siguiente
-            </button>
-          </nav>
+          <div className="mt-8">
+            <Paginacion pagina={pagina} totalPaginas={totalPaginas} cambiarPagina={setPagina} />
+          </div>
         </>
       )}
     </div>

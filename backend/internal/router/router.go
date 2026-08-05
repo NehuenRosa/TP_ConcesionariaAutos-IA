@@ -24,6 +24,8 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	repositorioUsuarios := repositories.NuevoUsuarioRepository(base)
 	servicioAutenticacion := services.NuevoAutenticacionService(repositorioUsuarios, configuracion.JWTSecreto, services.DuracionToken)
 	handlerAutenticacion := handlers.NuevoAutenticacionHandler(servicioAutenticacion)
+	servicioUsuarios := services.NuevoUsuariosService(repositorioUsuarios)
+	handlerUsuarios := handlers.NuevoUsuariosHandler(servicioUsuarios)
 
 	repositorioConsultas := repositories.NuevoConsultaRepository(base)
 	repositorioMensajes := repositories.NuevoMensajeRepository(base)
@@ -32,6 +34,10 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	handlerConsultas := handlers.NuevoConsultaHandler(servicioConsultas, servicioMensajes)
 	handlerMensajes := handlers.NuevoMensajeHandler(servicioMensajes)
 	handlerNotificaciones := handlers.NuevoNotificacionHandler(servicioConsultas, servicioMensajes)
+
+	repositorioTurnos := repositories.NuevoTurnoTestDriveRepository(base)
+	servicioTurnos := services.NuevoTurnoTestDriveService(repositorioTurnos, repositorioVehiculos)
+	handlerTurnos := handlers.NuevoTurnoTestDriveHandler(servicioTurnos)
 
 	api := enrutador.Group("/api")
 	{
@@ -61,6 +67,16 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 			gestionVehiculos.DELETE("/:id", handlerGestionVehiculos.DarDeBaja)
 		}
 
+		gestionUsuarios := api.Group("/admin/usuarios")
+		gestionUsuarios.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		gestionUsuarios.Use(middleware.ExigirRol("administrador"))
+		{
+			gestionUsuarios.GET("", handlerUsuarios.Listar)
+			gestionUsuarios.POST("", handlerUsuarios.Crear)
+			gestionUsuarios.PUT("/:id", handlerUsuarios.Actualizar)
+			gestionUsuarios.DELETE("/:id", handlerUsuarios.Eliminar)
+		}
+
 		consultas := api.Group("/consultas")
 		consultas.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
 		{
@@ -81,6 +97,25 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		notificaciones.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
 		{
 			notificaciones.GET("/contador", handlerNotificaciones.Contador)
+		}
+
+		api.GET("/test-drives/franjas", handlerTurnos.Franjas)
+
+		testDrives := api.Group("/test-drives")
+		testDrives.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		{
+			testDrives.POST("", handlerTurnos.Solicitar)
+			testDrives.GET("/mis-turnos", handlerTurnos.ListarMisTurnos)
+			testDrives.DELETE("/:id", handlerTurnos.Cancelar)
+
+			gestionTestDrives := testDrives.Group("")
+			gestionTestDrives.Use(middleware.ExigirRol("vendedor"))
+			{
+				gestionTestDrives.GET("", handlerTurnos.Listar)
+				gestionTestDrives.PUT("/:id/confirmar", handlerTurnos.Confirmar)
+				gestionTestDrives.PUT("/:id/cancelar", handlerTurnos.CancelarComoVendedor)
+				gestionTestDrives.PUT("/:id/completar", handlerTurnos.Completar)
+			}
 		}
 	}
 

@@ -5,8 +5,9 @@ import type {
   Vehiculo,
   VehiculoEntrada,
 } from '../types/vehiculo'
-import type { DatosLogin, DatosRegistro, RespuestaLogin, Usuario } from '../types/usuario'
+import type { DatosLogin, DatosRegistro, DatosUsuarioAdmin, RespuestaLogin, Usuario } from '../types/usuario'
 import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
+import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 const CLAVE_TOKEN = 'token_concesionaria'
@@ -73,6 +74,21 @@ export const api = {
       body: JSON.stringify(datos),
     }),
   obtenerPerfil: () => peticion<Usuario>('/auth/perfil'),
+
+  // Usuarios (administrador)
+  listarUsuarios: () => peticion<Usuario[]>('/admin/usuarios'),
+  crearUsuario: (datos: DatosUsuarioAdmin) =>
+    peticion<Usuario>('/admin/usuarios', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  actualizarUsuario: (id: number, datos: DatosUsuarioAdmin) =>
+    peticion<Usuario>(`/admin/usuarios/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(datos),
+    }),
+  eliminarUsuario: (id: number) =>
+    peticion<void>(`/admin/usuarios/${id}`, { method: 'DELETE' }),
   listarVehiculos: (pagina: number, tamano: number, filtros?: FiltrosVehiculos) =>
     peticion<PaginaVehiculos>(`/vehiculos?${construirConsultaVehiculos(pagina, tamano, filtros)}`),
   obtenerVehiculo: (id: number) => peticion<Vehiculo>(`/vehiculos/${id}`),
@@ -125,6 +141,25 @@ export const api = {
   // Notificaciones
   obtenerContadorNotificaciones: () =>
     peticion<{ contador: number }>('/notificaciones/contador'),
+
+  // Test drives
+  obtenerFranjas: () => peticion<FranjaHoraria[]>('/test-drives/franjas'),
+  solicitarTestDrive: (datos: SolicitarTestDrive) =>
+    peticion<TurnoTestDrive>('/test-drives', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  listarMisTestDrives: () => peticion<TurnoTestDrive[]>('/test-drives/mis-turnos'),
+  cancelarTestDrive: (id: number) =>
+    peticion<TurnoTestDrive>(`/test-drives/${id}`, { method: 'DELETE' }),
+  listarTestDrives: (estado?: string) =>
+    peticion<TurnoTestDrive[]>(`/test-drives${estado ? `?estado=${estado}` : ''}`),
+  confirmarTestDrive: (id: number) =>
+    peticion<TurnoTestDrive>(`/test-drives/${id}/confirmar`, { method: 'PUT' }),
+  cancelarTestDriveVendedor: (id: number) =>
+    peticion<TurnoTestDrive>(`/test-drives/${id}/cancelar`, { method: 'PUT' }),
+  completarTestDrive: (id: number) =>
+    peticion<TurnoTestDrive>(`/test-drives/${id}/completar`, { method: 'PUT' }),
 }
 
 // construirConsultaVehiculos arma la query string del catálogo público con

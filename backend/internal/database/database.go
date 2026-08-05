@@ -34,7 +34,7 @@ func Conectar(configuracion config.Configuracion) (*gorm.DB, error) {
 
 // AutoMigrar crea o actualiza las tablas a partir de los modelos.
 func AutoMigrar(base *gorm.DB) error {
-	if err := base.AutoMigrate(&models.Vehiculo{}, &models.Imagen{}, &models.Usuario{}, &models.Consulta{}, &models.Mensaje{}); err != nil {
+	if err := base.AutoMigrate(&models.Vehiculo{}, &models.Imagen{}, &models.Usuario{}, &models.Consulta{}, &models.Mensaje{}, &models.TurnoTestDrive{}); err != nil {
 		return fmt.Errorf("auto-migración: %w", err)
 	}
 	return nil

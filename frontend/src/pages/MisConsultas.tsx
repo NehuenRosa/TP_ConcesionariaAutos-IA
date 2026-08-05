@@ -3,42 +3,10 @@ import { Link, useParams, useNavigate } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { ConsultaResumen, EstadoConsulta } from '../types/consulta'
 import { ChatConsulta } from '../components/ChatConsulta'
-
-function formatearFecha(fecha: string): string {
-  return new Date(fecha).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function estadoATexto(estado: EstadoConsulta): string {
-  switch (estado) {
-    case 'pendiente':
-      return 'Pendiente'
-    case 'en_conversacion':
-      return 'En conversación'
-    case 'cerrada':
-      return 'Cerrada'
-    default:
-      return estado
-  }
-}
-
-function estadoColor(estado: EstadoConsulta): string {
-  switch (estado) {
-    case 'pendiente':
-      return 'bg-yellow-100 text-yellow-800'
-    case 'en_conversacion':
-      return 'bg-green-100 text-green-800'
-    case 'cerrada':
-      return 'bg-gray-100 text-gray-600'
-    default:
-      return 'bg-gray-100 text-gray-600'
-  }
-}
+import { ContenidoCargando } from '../components/ui/Spinner'
+import { Boton } from '../components/ui/Boton'
+import { estilosEstadoConsulta, etiquetasEstadoConsulta, EtiquetaEstado } from '../components/ui/EtiquetaEstado'
+import { formatearFechaHora } from '../utils/formato'
 
 export function MisConsultas() {
   const { id } = useParams<{ id: string }>()
@@ -63,8 +31,6 @@ export function MisConsultas() {
     cargarConsultas()
   }, [cargarConsultas])
 
-  // Recargar al volver del chat (se marcaron leídos) y cada 5 segundos para
-  // detectar mensajes nuevos.
   useEffect(() => {
     const manejarLeidos = () => cargarConsultas()
     window.addEventListener('mensajes-leidos', manejarLeidos)
@@ -80,80 +46,80 @@ export function MisConsultas() {
   const seleccionada = id ? consultas.find((c) => c.id === Number(id)) : null
 
   if (cargando) {
-    return <p className="text-gray-700">Cargando consultas…</p>
+    return <ContenidoCargando etiqueta="Cargando consultas…" />
   }
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4">
-      {/* Lista de consultas */}
-      <div className="w-80 flex-shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-white">
-        <div className="border-b border-gray-200 p-4">
-          <h1 className="text-lg font-semibold text-gray-900">Mis Consultas</h1>
+    <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-10 sm:px-6 lg:h-[calc(100vh-8rem)] lg:flex-row lg:px-8">
+      <aside className="flex w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-white/8 bg-carbono-850/60 backdrop-blur-sm lg:w-80">
+        <div className="border-b border-white/8 px-5 py-4">
+          <h1 className="font-display text-lg font-semibold text-plata-100">Mis consultas</h1>
         </div>
 
         {error && (
-          <div className="border-b border-gray-200 bg-red-50 p-3">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="border-b border-white/8 bg-red-500/10 px-5 py-3 text-sm text-red-300">
+            {error}
           </div>
         )}
 
         {consultas.length === 0 ? (
           <div className="p-8 text-center">
-            <p className="text-gray-500">No tenés consultas</p>
-            <Link
-              to="/catalogo"
-              className="mt-2 inline-block text-sm text-gray-900 hover:underline"
-            >
-              Ver catálogo
-            </Link>
+            <p className="text-sm text-plata-400">No tenés consultas todavía.</p>
+            <Boton variante="secundario" tamano="sm" className="mt-4">
+              <Link to="/catalogo">Explorar catálogo</Link>
+            </Boton>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
-            {consultas.map((consulta) => (
-              <button
-                key={consulta.id}
-                type="button"
-                onClick={() => navigate(`/mis-consultas/${consulta.id}`)}
-                className={`relative w-full p-4 text-left transition-colors hover:bg-gray-50 ${
-                  seleccionada?.id === consulta.id ? 'bg-gray-100' : ''
-                }`}
-              >
-                {consulta.mensajesNuevos > 0 && (
-                  <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-red-500" />
-                )}
+          <div className="flex-1 divide-y divide-white/6 overflow-y-auto">
+            {consultas.map((consulta) => {
+              const activa = seleccionada?.id === consulta.id
+              const estado = consulta.estado as EstadoConsulta
+              return (
+                <button
+                  key={consulta.id}
+                  type="button"
+                  onClick={() => navigate(`/mis-consultas/${consulta.id}`)}
+                  className={`relative w-full p-4 text-left transition-colors ${
+                    activa ? 'bg-white/6' : 'hover:bg-white/4'
+                  }`}
+                >
+                  {consulta.mensajesNuevos > 0 && (
+                    <span className="absolute top-3 right-3 h-2.5 w-2.5">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-acento-400 opacity-60" />
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-acento-400" />
+                    </span>
+                  )}
 
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">
-                    {consulta.vehiculo.marca} {consulta.vehiculo.modelo}
-                  </h3>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${estadoColor(consulta.estado)}`}>
-                    {estadoATexto(consulta.estado)}
-                  </span>
-                </div>
+                  <div className="flex items-center gap-2 pr-4">
+                    <h3 className="truncate font-display text-sm font-semibold text-plata-100">
+                      {consulta.vehiculo.marca} {consulta.vehiculo.modelo}
+                    </h3>
+                  </div>
+                  <div className="mt-2">
+                    <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
+                  </div>
 
-                {consulta.vendedor && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    Vendedor: {consulta.vendedor.nombre}
-                  </p>
-                )}
+                  {consulta.vendedor && (
+                    <p className="mt-2 text-xs text-plata-400">
+                      Vendedor: <span className="text-plata-300">{consulta.vendedor.nombre}</span>
+                    </p>
+                  )}
 
-                {consulta.ultimoMensaje && (
-                  <p className="mt-1 truncate text-sm text-gray-500">
-                    {consulta.ultimoMensaje.contenido}
-                  </p>
-                )}
+                  {consulta.ultimoMensaje && (
+                    <p className="mt-1 truncate text-sm text-plata-400">
+                      {consulta.ultimoMensaje.contenido}
+                    </p>
+                  )}
 
-                <p className="mt-1 text-xs text-gray-400">
-                  {formatearFecha(consulta.updatedAt)}
-                </p>
-              </button>
-            ))}
+                  <p className="mt-1 text-xs text-plata-500">{formatearFechaHora(consulta.updatedAt)}</p>
+                </button>
+              )
+            })}
           </div>
         )}
-      </div>
+      </aside>
 
-      {/* Área de chat */}
-      <div className="flex-1 rounded-lg border border-gray-200 bg-white">
+      <section className="flex min-h-[28rem] flex-1 flex-col overflow-hidden rounded-2xl border border-white/8 bg-carbono-850/60 backdrop-blur-sm">
         {seleccionada ? (
           <ChatConsulta
             consultaId={seleccionada.id}
@@ -161,11 +127,25 @@ export function MisConsultas() {
             onMensajeEnviado={cargarConsultas}
           />
         ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-gray-500">Seleccioná una consulta para ver la conversación</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-carbono-800 text-plata-400">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="font-display text-base font-semibold text-plata-100">Conversación</p>
+              <p className="mt-1 max-w-xs text-sm text-plata-400">
+                Seleccioná una consulta para ver la conversación con tu vendedor.
+              </p>
+            </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   )
 }

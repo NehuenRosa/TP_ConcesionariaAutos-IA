@@ -2,42 +2,12 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { ConsultaResumen, EstadoConsulta } from '../types/consulta'
-
-function formatearFecha(fecha: string): string {
-  return new Date(fecha).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function estadoATexto(estado: EstadoConsulta): string {
-  switch (estado) {
-    case 'pendiente':
-      return 'Pendiente'
-    case 'en_conversacion':
-      return 'En conversación'
-    case 'cerrada':
-      return 'Cerrada'
-    default:
-      return estado
-  }
-}
-
-function estadoColor(estado: EstadoConsulta): string {
-  switch (estado) {
-    case 'pendiente':
-      return 'bg-yellow-100 text-yellow-800'
-    case 'en_conversacion':
-      return 'bg-green-100 text-green-800'
-    case 'cerrada':
-      return 'bg-gray-100 text-gray-600'
-    default:
-      return 'bg-gray-100 text-gray-600'
-  }
-}
+import { Boton } from '../components/ui/Boton'
+import { ContenidoCargando } from '../components/ui/Spinner'
+import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
+import { EstadoVacio } from '../components/ui/EstadoVacio'
+import { estilosEstadoConsulta, etiquetasEstadoConsulta, EtiquetaEstado } from '../components/ui/EtiquetaEstado'
+import { formatearFechaHora } from '../utils/formato'
 
 export function BandejaEntrada() {
   const navigate = useNavigate()
@@ -61,8 +31,6 @@ export function BandejaEntrada() {
     cargarBandeja()
   }, [cargarBandeja])
 
-  // Recargar al volver del chat (se marcaron leídos) y cada 5 segundos para
-  // detectar mensajes nuevos.
   useEffect(() => {
     const manejarLeidos = () => cargarBandeja()
     window.addEventListener('mensajes-leidos', manejarLeidos)
@@ -94,6 +62,9 @@ export function BandejaEntrada() {
   }
 
   const handleEliminar = async (id: number) => {
+    if (!window.confirm('¿Eliminar esta consulta y su conversación? Esta acción no se puede deshacer.')) {
+      return
+    }
     try {
       await api.eliminarConsulta(id)
       await cargarBandeja()
@@ -103,99 +74,105 @@ export function BandejaEntrada() {
   }
 
   if (cargando) {
-    return <p className="text-gray-700">Cargando bandeja de entrada…</p>
+    return <ContenidoCargando etiqueta="Cargando bandeja de entrada…" />
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Bandeja de entrada</h1>
+    <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+      <EncabezadoPagina
+        destacado="Vendedor"
+        titulo="Bandeja de entrada"
+        descripcion="Consultas asignadas y disponibles. Tomá, respondé y gestioná cada conversación."
+      />
 
       {error && (
-        <div className="rounded-lg bg-red-50 p-4">
-          <p className="text-red-800">{error}</p>
+        <div className="mt-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          {error}
         </div>
       )}
 
       {consultas.length === 0 ? (
-        <div className="rounded-lg border border-gray-200 p-8 text-center">
-          <p className="text-gray-500">No tenés consultas asignadas</p>
+        <div className="mt-8">
+          <EstadoVacio
+            titulo="No tenés consultas asignadas"
+            descripcion="Cuando un cliente inicie una consulta o cotización, va a aparecer acá."
+          />
         </div>
       ) : (
-        <div className="grid gap-4">
-          {consultas.map((consulta) => (
-            <div
-              key={consulta.id}
-              className={`relative rounded-lg border p-4 transition-all hover:shadow-md ${
-                consulta.mensajesNuevos > 0
-                  ? 'border-blue-300 bg-blue-50'
-                  : 'border-gray-200 bg-white'
-              }`}
-            >
-              {consulta.mensajesNuevos > 0 && (
-                <span className="absolute right-4 top-4 h-3 w-3 rounded-full bg-red-500" />
-              )}
+        <div className="mt-8 grid gap-4">
+          {consultas.map((consulta) => {
+            const estado = consulta.estado as EstadoConsulta
+            const nueva = consulta.mensajesNuevos > 0
+            return (
+              <article
+                key={consulta.id}
+                className={`relative rounded-2xl border p-5 shadow-luz backdrop-blur-sm transition-all ${
+                  nueva
+                    ? 'border-acento-400/40 bg-acento-400/5'
+                    : 'border-white/8 bg-carbono-850/60'
+                }`}
+              >
+                {nueva && (
+                  <span className="absolute top-4 right-4 flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-acento-400 opacity-60" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-acento-400" />
+                  </span>
+                )}
 
-              <div className="flex items-start justify-between">
-                <div
-                  className="flex-1 cursor-pointer"
-                  onClick={() => navigate(`/vendedor/bandeja/${consulta.id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-gray-900">
-                      {consulta.vehiculo.marca} {consulta.vehiculo.modelo} {consulta.vehiculo.anio}
-                    </h3>
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${estadoColor(consulta.estado)}`}>
-                      {estadoATexto(consulta.estado)}
-                    </span>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div
+                    className="min-w-0 flex-1 cursor-pointer"
+                    onClick={() => navigate(`/vendedor/bandeja/${consulta.id}`)}
+                  >
+                    <div className="flex flex-wrap items-center gap-3">
+                      <h3 className="font-display text-lg font-semibold text-plata-100">
+                        {consulta.vehiculo.marca} {consulta.vehiculo.modelo}{' '}
+                        <span className="font-normal text-plata-400">· {consulta.vehiculo.anio}</span>
+                      </h3>
+                      <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
+                    </div>
+
+                    <p className="mt-2 text-sm text-plata-400">
+                      Cliente: <span className="text-plata-300">{consulta.cliente.nombre}</span>
+                    </p>
+
+                    {consulta.ultimoMensaje && (
+                      <p className="mt-2 truncate text-sm text-plata-400">
+                        {consulta.ultimoMensaje.contenido}
+                      </p>
+                    )}
+
+                    <p className="mt-1 text-xs text-plata-500">{formatearFechaHora(consulta.updatedAt)}</p>
                   </div>
 
-                  <p className="mt-1 text-sm text-gray-600">
-                    Cliente: {consulta.cliente.nombre}
-                  </p>
-
-                  {consulta.ultimoMensaje && (
-                    <p className="mt-2 truncate text-sm text-gray-500">
-                      {consulta.ultimoMensaje.contenido}
-                    </p>
-                  )}
-
-                  <p className="mt-1 text-xs text-gray-400">
-                    {formatearFecha(consulta.updatedAt)}
-                  </p>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    {estado === 'pendiente' && (
+                      <Boton tamano="sm" onClick={() => handleTomar(consulta.id)}>
+                        Tomar consulta
+                      </Boton>
+                    )}
+                    {estado === 'en_conversacion' && (
+                      <Boton variante="secundario" tamano="sm" onClick={() => handleCerrar(consulta.id)}>
+                        Cerrar
+                      </Boton>
+                    )}
+                    {estado === 'cerrada' && (
+                      <Boton variante="peligro" tamano="sm" onClick={() => handleEliminar(consulta.id)}>
+                        Eliminar
+                      </Boton>
+                    )}
+                    <Boton
+                      variante="fantasma"
+                      tamano="sm"
+                      onClick={() => navigate(`/vendedor/bandeja/${consulta.id}`)}
+                    >
+                      Abrir chat
+                    </Boton>
+                  </div>
                 </div>
-
-                <div className="ml-4 flex gap-2">
-                  {consulta.estado === 'pendiente' && (
-                    <button
-                      type="button"
-                      onClick={() => handleTomar(consulta.id)}
-                      className="rounded-md bg-gray-900 px-3 py-1 text-sm text-white hover:bg-gray-700"
-                    >
-                      Tomar
-                    </button>
-                  )}
-                  {consulta.estado === 'en_conversacion' && (
-                    <button
-                      type="button"
-                      onClick={() => handleCerrar(consulta.id)}
-                      className="rounded-md border border-gray-300 px-3 py-1 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Cerrar
-                    </button>
-                  )}
-                  {consulta.estado === 'cerrada' && (
-                    <button
-                      type="button"
-                      onClick={() => handleEliminar(consulta.id)}
-                      className="rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      Eliminar
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+              </article>
+            )
+          })}
         </div>
       )}
     </div>

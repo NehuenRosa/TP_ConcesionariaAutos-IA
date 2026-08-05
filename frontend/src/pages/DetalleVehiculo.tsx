@@ -3,17 +3,13 @@ import { Link, useParams } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { Vehiculo } from '../types/vehiculo'
 import { useAuth } from '../hooks/useAuth'
-
-function formatearPrecio(precio: number): string {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    maximumFractionDigits: 0,
-  }).format(precio)
-}
+import { Boton } from '../components/ui/Boton'
+import { CampoArea } from '../components/ui/Campo'
+import { ContenidoCargando } from '../components/ui/Spinner'
+import { etiquetaCondicion, formatearPrecio } from '../utils/formato'
 
 function formatearKilometraje(kilometraje: number): string {
-  return new Intl.NumberFormat('es-AR').format(kilometraje)
+  return `${new Intl.NumberFormat('es-AR').format(kilometraje)} km`
 }
 
 export function DetalleVehiculo() {
@@ -80,35 +76,52 @@ export function DetalleVehiculo() {
   }
 
   if (cargando) {
-    return <p className="text-gray-700">Cargando vehículo…</p>
+    return <ContenidoCargando etiqueta="Cargando vehículo…" />
   }
 
   if (error || !vehiculo) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-gray-900">Vehículo no encontrado</h1>
-        <p className="text-gray-700">{error ?? 'El vehículo solicitado no existe o no está disponible.'}</p>
-        <Link
-          to="/catalogo"
-          className="inline-block rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-700"
-        >
-          Volver al catálogo
-        </Link>
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center sm:px-6">
+        <p className="mb-2 font-display text-xs font-semibold tracking-[0.3em] text-acento-400 uppercase">
+          Error
+        </p>
+        <h1 className="font-display text-3xl font-bold text-plata-100">Vehículo no encontrado</h1>
+        <p className="mt-3 text-plata-400">{error ?? 'El vehículo solicitado no existe o no está disponible.'}</p>
+        <div className="mt-8">
+          <Boton variante="secundario">
+            <Link to="/catalogo">Volver al catálogo</Link>
+          </Boton>
+        </div>
       </div>
     )
   }
 
   const imagenes = vehiculo.imagenes ?? []
 
+  const ficha = [
+    { nombre: 'Año', valor: String(vehiculo.anio) },
+    { nombre: 'Kilometraje', valor: formatearKilometraje(vehiculo.kilometraje) },
+    { nombre: 'Combustible', valor: vehiculo.combustible },
+    { nombre: 'Transmisión', valor: vehiculo.transmision },
+    {
+      nombre: 'Tipo',
+      valor: vehiculo.tipo ? vehiculo.tipo.charAt(0).toUpperCase() + vehiculo.tipo.slice(1) : '—',
+    },
+    { nombre: 'Condición', valor: etiquetaCondicion(vehiculo.condicion) },
+  ]
+
   return (
-    <div className="space-y-8">
-      <Link to="/catalogo" className="text-sm text-gray-700 hover:text-gray-900">
-        ← Volver al catálogo
+    <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <Link
+        to="/catalogo"
+        className="inline-flex items-center gap-2 font-display text-sm font-medium text-plata-400 transition-colors hover:text-plata-100"
+      >
+        <span aria-hidden>←</span> Volver al catálogo
       </Link>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+      <div className="mt-8 grid grid-cols-1 gap-10 lg:grid-cols-2">
         <div className="space-y-4">
-          <div className="flex h-80 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/8 bg-carbono-850">
             {imagenes[imagenActiva] ? (
               <img
                 src={imagenes[imagenActiva].url}
@@ -116,21 +129,26 @@ export function DetalleVehiculo() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <span className="text-gray-500">Sin imagen</span>
+              <div className="flex h-full items-center justify-center text-plata-500">Sin imagen</div>
             )}
+            <span className="absolute top-4 left-4 rounded-full border border-white/15 bg-carbono-950/70 px-3 py-1 font-display text-[11px] font-semibold tracking-[0.15em] text-plata-200 uppercase backdrop-blur-sm">
+              {etiquetaCondicion(vehiculo.condicion)}
+            </span>
           </div>
 
           {imagenes.length > 1 && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {imagenes.map((imagen, indice) => (
                 <button
                   key={imagen.id}
                   type="button"
                   onClick={() => setImagenActiva(indice)}
-                  className={`h-16 w-24 overflow-hidden rounded-md border ${
-                    indice === imagenActiva ? 'border-gray-900' : 'border-gray-200'
-                  }`}
                   aria-label={`Ver imagen ${indice + 1}`}
+                  className={`aspect-[4/3] w-24 overflow-hidden rounded-lg border transition ${
+                    indice === imagenActiva
+                      ? 'border-acento-400 shadow-resaltado'
+                      : 'border-white/10 opacity-70 hover:opacity-100'
+                  }`}
                 >
                   <img src={imagen.url} alt="" className="h-full w-full object-cover" />
                 </button>
@@ -139,108 +157,93 @@ export function DetalleVehiculo() {
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <p className="font-display text-xs font-semibold tracking-[0.3em] text-acento-400 uppercase">
+              {etiquetaCondicion(vehiculo.condicion)}
+            </p>
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-plata-100 sm:text-4xl">
               {vehiculo.marca} {vehiculo.modelo}
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              {vehiculo.anio} · {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
+            <p className="mt-2 text-plata-400">{vehiculo.anio}</p>
+            <p className="texto-numerico mt-5 font-display text-4xl font-bold text-plata-100">
+              {formatearPrecio(vehiculo.precio)}
             </p>
-            <p className="mt-4 text-3xl font-bold text-gray-900">{formatearPrecio(vehiculo.precio)}</p>
           </div>
 
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Año</dt>
-              <dd className="text-lg font-semibold text-gray-900">{vehiculo.anio}</dd>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Kilometraje</dt>
-              <dd className="text-lg font-semibold text-gray-900">
-                {formatearKilometraje(vehiculo.kilometraje)} km
-              </dd>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Combustible</dt>
-              <dd className="text-lg font-semibold text-gray-900">{vehiculo.combustible}</dd>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Transmisión</dt>
-              <dd className="text-lg font-semibold text-gray-900">{vehiculo.transmision}</dd>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Tipo</dt>
-              <dd className="text-lg font-semibold text-gray-900">
-                {vehiculo.tipo ? vehiculo.tipo.charAt(0).toUpperCase() + vehiculo.tipo.slice(1) : '—'}
-              </dd>
-            </div>
-            <div className="rounded-lg border border-gray-200 p-4">
-              <dt className="text-sm text-gray-500">Condición</dt>
-              <dd className="text-lg font-semibold text-gray-900">
-                {vehiculo.condicion === 'nuevo' ? 'Nuevo' : 'Usado'}
-              </dd>
-            </div>
+            {ficha.map((dato) => (
+              <div key={dato.nombre} className="rounded-xl border border-white/8 bg-carbono-850/60 p-4">
+                <dt className="font-display text-[11px] font-semibold tracking-[0.2em] text-plata-500 uppercase">
+                  {dato.nombre}
+                </dt>
+                <dd className="mt-1 text-lg font-semibold text-plata-100">{dato.valor}</dd>
+              </div>
+            ))}
           </dl>
 
-          {esCliente && (
-            <div className="border-t border-gray-200 pt-6">
-              {exitoConsulta ? (
-                <div className="rounded-lg bg-green-50 p-4">
-                  <p className="text-green-800">Consulta enviada correctamente. Un vendedor te responderá pronto.</p>
-                  <Link
-                    to="/mis-consultas"
-                    className="mt-2 inline-block text-sm font-medium text-green-700 hover:text-green-900"
-                  >
-                    Ver mis consultas →
-                  </Link>
-                </div>
-              ) : mostrarFormulario ? (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Enviar consulta</h3>
-                  <textarea
-                    value={mensajeConsulta}
-                    onChange={(e) => setMensajeConsulta(e.target.value)}
-                    placeholder="Escribí tu consulta sobre este vehículo..."
-                    className="w-full rounded-lg border border-gray-300 p-3 text-gray-900 focus:border-gray-500 focus:outline-none"
-                    rows={4}
-                    disabled={enviandoConsulta}
-                  />
-                  {errorConsulta && (
-                    <p className="text-sm text-red-600">{errorConsulta}</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleEnviarConsulta}
-                      disabled={enviandoConsulta || !mensajeConsulta.trim()}
-                      className="rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-700 disabled:opacity-50"
+          <div className="space-y-3 border-t border-white/8 pt-6">
+            {esCliente ? (
+              <>
+                <Boton tamano="lg" className="w-full">
+                  <Link to={`/catalogo/${vehiculo.id}/test-drive`}>Solicitar test drive</Link>
+                </Boton>
+
+                {exitoConsulta ? (
+                  <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-300">
+                    <p>Consulta enviada correctamente. Un vendedor te responderá pronto.</p>
+                    <Link
+                      to="/mis-consultas"
+                      className="mt-2 inline-block font-semibold text-emerald-200 underline-offset-4 hover:underline"
                     >
-                      {enviandoConsulta ? 'Enviando...' : 'Enviar consulta'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMostrarFormulario(false)
-                        setErrorConsulta(null)
-                      }}
-                      className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancelar
-                    </button>
+                      Ver mis consultas →
+                    </Link>
                   </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setMostrarFormulario(true)}
-                  className="w-full rounded-md bg-gray-900 px-4 py-3 text-white hover:bg-gray-700"
-                >
-                  Consultar sobre este vehículo
-                </button>
-              )}
-            </div>
-          )}
+                ) : mostrarFormulario ? (
+                  <div className="space-y-4">
+                    <h3 className="font-display text-lg font-semibold text-plata-100">Enviar consulta</h3>
+                    <CampoArea
+                      value={mensajeConsulta}
+                      onChange={(e) => setMensajeConsulta(e.target.value)}
+                      placeholder="Escribí tu consulta sobre este vehículo…"
+                      rows={4}
+                      disabled={enviandoConsulta}
+                      error={errorConsulta ?? undefined}
+                    />
+                    <div className="flex gap-3">
+                      <Boton
+                        variante="acento"
+                        onClick={handleEnviarConsulta}
+                        disabled={enviandoConsulta || !mensajeConsulta.trim()}
+                      >
+                        {enviandoConsulta ? 'Enviando…' : 'Enviar consulta'}
+                      </Boton>
+                      <Boton
+                        variante="secundario"
+                        onClick={() => {
+                          setMostrarFormulario(false)
+                          setErrorConsulta(null)
+                        }}
+                      >
+                        Cancelar
+                      </Boton>
+                    </div>
+                  </div>
+                ) : (
+                  <Boton variante="secundario" tamano="lg" className="w-full" onClick={() => setMostrarFormulario(true)}>
+                    Consultar sobre este vehículo
+                  </Boton>
+                )}
+              </>
+            ) : (
+              <div className="rounded-xl border border-white/8 bg-carbono-850/60 p-4 text-sm text-plata-400">
+                <Link to="/login" className="font-semibold text-plata-100 underline-offset-4 hover:underline">
+                  Iniciá sesión
+                </Link>{' '}
+                como cliente para consultar o reservar este vehículo.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

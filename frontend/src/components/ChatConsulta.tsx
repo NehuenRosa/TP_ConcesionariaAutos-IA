@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { api, ErrorApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import type { Mensaje, EstadoConsulta } from '../types/consulta'
+import { Boton } from './ui/Boton'
 
 interface ChatConsultaProps {
   consultaId: number
@@ -25,7 +26,6 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
     }
   }
 
-  // Cargar mensajes iniciales y marcar como leídos
   useEffect(() => {
     let cancelado = false
 
@@ -34,12 +34,10 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
         const datos = await api.obtenerMensajes(consultaId)
         if (!cancelado) {
           setMensajes(datos)
-          // Guardar timestamp del último mensaje
           if (datos.length > 0) {
             ultimoTimestampRef.current = datos[datos.length - 1].createdAt
           }
           setError(null)
-          // Marcar mensajes como leídos al abrir el chat
           api.marcarComoLeidos(consultaId).then(() => {
             window.dispatchEvent(new Event('mensajes-leidos'))
           }).catch(() => {})
@@ -64,19 +62,16 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
     scrollToBottom()
   }, [mensajes])
 
-  // Polling cada 5 segundos para mensajes nuevos (sin dependencia de mensajes)
   useEffect(() => {
     if (estado === 'cerrada') return
 
     const intervalo = setInterval(async () => {
-      // Usar el ref en lugar del estado para evitar dependencia
       if (!ultimoTimestampRef.current) return
-      
+
       try {
         const nuevos = await api.obtenerMensajesNuevos(consultaId, ultimoTimestampRef.current)
         if (nuevos.length > 0) {
-          // Filtrar mensajes de otros (no míos) para marcar como leídos
-          const mensajesDeOtros = nuevos.filter(m => m.remitente.id !== usuario?.id)
+          const mensajesDeOtros = nuevos.filter((m) => m.remitente.id !== usuario?.id)
           if (mensajesDeOtros.length > 0) {
             api.marcarComoLeidos(consultaId).then(() => {
               window.dispatchEvent(new Event('mensajes-leidos'))
@@ -84,11 +79,9 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
           }
 
           setMensajes((prev) => {
-            // Filtrar mensajes duplicados por ID
-            const idsExistentes = new Set(prev.map(m => m.id))
-            const mensajesNuevos = nuevos.filter(m => !idsExistentes.has(m.id))
+            const idsExistentes = new Set(prev.map((m) => m.id))
+            const mensajesNuevos = nuevos.filter((m) => !idsExistentes.has(m.id))
             if (mensajesNuevos.length === 0) return prev
-            // Actualizar timestamp del último mensaje
             ultimoTimestampRef.current = mensajesNuevos[mensajesNuevos.length - 1].createdAt
             return [...prev, ...mensajesNuevos]
           })
@@ -110,7 +103,6 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
     try {
       const mensaje = await api.enviarMensaje(consultaId, nuevoMensaje.trim())
       setMensajes((prev) => [...prev, mensaje])
-      // Actualizar timestamp con el mensaje enviado
       ultimoTimestampRef.current = mensaje.createdAt
       setNuevoMensaje('')
       onMensajeEnviado?.()
@@ -131,7 +123,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
   if (cargando) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-gray-500">Cargando mensajes…</p>
+        <p className="text-sm text-plata-400">Cargando mensajes…</p>
       </div>
     )
   }
@@ -140,52 +132,43 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
 
   return (
     <div className="flex h-full flex-col">
-      {/* Encabezado */}
-      <div className="border-b border-gray-200 p-4">
-        <p className="text-sm text-gray-500">
+      <div className="border-b border-white/8 px-5 py-3.5">
+        <p className="text-xs text-plata-400">
           {cerrada ? 'Consulta cerrada' : 'Escribí tu mensaje'}
         </p>
       </div>
 
-      {/* Mensajes */}
-      <div ref={mensajesRef} className="flex-1 overflow-y-auto p-4">
+      <div ref={mensajesRef} className="flex-1 overflow-y-auto px-5 py-4">
         {error && (
-          <div className="mb-4 rounded-lg bg-red-50 p-3">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+            {error}
           </div>
         )}
 
         {mensajes.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-gray-500">No hay mensajes aún</p>
+            <p className="text-sm text-plata-500">No hay mensajes aún</p>
           </div>
         ) : (
           <div className="space-y-4">
             {mensajes.map((mensaje) => {
               const esMio = mensaje.remitente.id === usuario?.id
               return (
-                <div
-                  key={mensaje.id}
-                  className={`flex ${esMio ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={mensaje.id} className={`flex ${esMio ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                    className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
                       esMio
-                        ? 'bg-gray-900 text-white'
-                        : 'bg-gray-100 text-gray-900'
+                        ? 'rounded-br-sm bg-plata-100 text-carbono-900'
+                        : 'rounded-bl-sm border border-white/8 bg-carbono-800 text-plata-100'
                     }`}
                   >
                     {!esMio && (
-                      <p className="mb-1 text-xs font-medium text-gray-500">
+                      <p className="mb-1 text-xs font-semibold text-plata-400">
                         {mensaje.remitente.nombre}
                       </p>
                     )}
-                    <p className="whitespace-pre-wrap">{mensaje.contenido}</p>
-                    <p
-                      className={`mt-1 text-xs ${
-                        esMio ? 'text-gray-300' : 'text-gray-400'
-                      }`}
-                    >
+                    <p className="whitespace-pre-wrap text-sm">{mensaje.contenido}</p>
+                    <p className={`mt-1 text-[11px] ${esMio ? 'text-carbono-500' : 'text-plata-500'}`}>
                       {new Date(mensaje.createdAt).toLocaleTimeString('es-AR', {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -199,27 +182,21 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
         )}
       </div>
 
-      {/* Input */}
       {!cerrada && (
-        <div className="border-t border-gray-200 p-4">
-          <div className="flex gap-2">
+        <div className="border-t border-white/8 p-4">
+          <div className="flex items-end gap-2">
             <textarea
               value={nuevoMensaje}
               onChange={(e) => setNuevoMensaje(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Escribí tu mensaje..."
-              className="flex-1 resize-none rounded-lg border border-gray-300 p-3 text-gray-900 focus:border-gray-500 focus:outline-none"
+              placeholder="Escribí tu mensaje…"
+              className="campo resize-none"
               rows={2}
               disabled={enviando}
             />
-            <button
-              type="button"
-              onClick={handleEnviar}
-              disabled={enviando || !nuevoMensaje.trim()}
-              className="self-end rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-gray-700 disabled:opacity-50"
-            >
-              {enviando ? '...' : 'Enviar'}
-            </button>
+            <Boton onClick={handleEnviar} disabled={enviando || !nuevoMensaje.trim()}>
+              {enviando ? '…' : 'Enviar'}
+            </Boton>
           </div>
         </div>
       )}

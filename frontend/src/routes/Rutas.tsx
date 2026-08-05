@@ -13,6 +13,10 @@ import { RutaProtegida } from '../components/RutaProtegida'
 import { MisConsultas } from '../pages/MisConsultas'
 import { BandejaEntrada } from '../pages/BandejaEntrada'
 import { ChatVendedor } from '../pages/ChatVendedor'
+import { FormularioTestDrive } from '../pages/FormularioTestDrive'
+import { MisTestDrives } from '../pages/MisTestDrives'
+import { GestionTestDrives } from '../pages/GestionTestDrives'
+import { GestionUsuarios } from '../pages/GestionUsuarios'
 
 export function Rutas() {
   return (
@@ -56,6 +60,14 @@ export function Rutas() {
           }
         />
         <Route
+          path="/admin/usuarios"
+          element={
+            <RutaProtegida rol="administrador">
+              <GestionUsuarios />
+            </RutaProtegida>
+          }
+        />
+        <Route
           path="/mis-consultas"
           element={
             <RutaProtegida rol="cliente">
@@ -84,6 +96,30 @@ export function Rutas() {
           element={
             <RutaProtegida rol="vendedor">
               <ChatVendedor />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/vendedor/test-drives"
+          element={
+            <RutaProtegida rol="vendedor">
+              <GestionTestDrives />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/catalogo/:id/test-drive"
+          element={
+            <RutaProtegida rol="cliente">
+              <FormularioTestDrive />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-test-drives"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisTestDrives />
             </RutaProtegida>
           }
         />
