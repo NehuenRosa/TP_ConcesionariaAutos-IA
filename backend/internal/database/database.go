@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"concesionaria/backend/internal/config"
 	"concesionaria/backend/internal/models"
@@ -11,17 +12,29 @@ import (
 	"gorm.io/gorm"
 )
 
-// Conectar abre la conexión a PostgreSQL usando GORM.
+// Conectar abre la conexión a PostgreSQL usando GORM. Si se define BD_URL
+// (cadena completa, p. ej. en Render) se usa directamente; en caso contrario
+// se arma el DSN a partir de las variables BD_*.
 func Conectar(configuracion config.Configuracion) (*gorm.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		configuracion.BDHost,
-		configuracion.BDPuerto,
-		configuracion.BDUsuario,
-		configuracion.BDPassword,
-		configuracion.BDNombre,
-		configuracion.BDSSL,
-	)
+	dsn := configuracion.BDURL
+	if dsn == "" {
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+			configuracion.BDHost,
+			configuracion.BDPuerto,
+			configuracion.BDUsuario,
+			configuracion.BDPassword,
+			configuracion.BDNombre,
+			configuracion.BDSSL,
+		)
+	} else if !strings.Contains(dsn, "sslmode=") {
+		// Render exige SSL en Postgres: lo agregamos si la URL no lo indica.
+		separador := "?"
+		if strings.Contains(dsn, "?") {
+			separador = "&"
+		}
+		dsn += separador + "sslmode=require"
+	}
 
 	base, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

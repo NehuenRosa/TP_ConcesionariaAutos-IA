@@ -16,7 +16,10 @@ context: |
   - Backend: Go + Gin (HTTP) + GORM (ORM) + JWT. API REST.
   - Frontend: React + Vite + TypeScript + React Router + TailwindCSS.
   - Base de datos: PostgreSQL.
-  - Chatbot: LangChain (langchaingo en el backend Go), conectado a la API.
+  - Chatbot: LangChain (langchaingo en el backend Go), conectado a la API,
+    con Ollama (modelo de chat y modelo de visión). La tasación usa valores
+    reales de la Guía Oficial de Precios de la CCA, consultada a través de la
+    API pública de ArgAutos (ARGAUTOS_URL); nunca inventa precios.
   - Infra: Docker + Docker Compose.
 
   Arquitectura backend por capas: handler (HTTP) → service (negocio) →

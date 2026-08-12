@@ -32,7 +32,7 @@ vehículos disponibles.
 | CU-07 | Turno de test drive | El cliente solicita turno eligiendo fecha y franja horaria; el sistema valida disponibilidad y evita superposición. |
 | CU-08 | Reserva de vehículo | El cliente reserva una unidad (disponible → reservado); el vendedor confirma la venta o cancela y libera la unidad. |
 | CU-09 | Panel de administración | Dashboard con vehículos por estado, consultas por período, reservas activas y test drives agendados, con gráficos simples. |
-| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain) que responde en lenguaje natural sobre el stock real y orienta al usuario a consultar o pedir un test drive. |
+| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Ollama) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
 
 El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 
@@ -43,7 +43,7 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 | Backend | Go + Gin (HTTP) + GORM (ORM) + JWT. API REST. |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS. |
 | Base de datos | PostgreSQL. |
-| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema. |
+| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema y a Ollama (modelos `MODELO_CHATBOT` y `MODELO_VISION`). La tasación usa valores reales de la Guía Oficial de Precios de la CCA vía API de ArgAutos (`ARGAUTOS_URL`); nunca inventa montos. |
 | Infra | Docker + Docker Compose para desarrollo local. Git. |
 
 **Regla:** no agregar dependencias fuera de este stack sin autorización.
@@ -146,6 +146,23 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 - **Administrador**: ABM de vehículos (CU-02), gestión de usuarios y métricas (CU-09).
 - Autorización basada en JWT con claims de rol.
 
+### Chatbot asistente (CU-10)
+
+- **Endpoints públicos**: `POST /api/chatbot/mensajes` (chat con historial) y
+  `POST /api/chatbot/tasacion` (multipart con hasta 5 fotos JPG/PNG/WebP de máx.
+  5 MB + `descripcion` opcional). No requieren autenticación.
+- **Tasación con valores reales**: el modelo de visión solo *identifica* el
+  vehículo (JSON `{marca, modelo, anio, estado, kilometraje}`); el monto lo
+  compone el código (`precios.go`) con el valor oficial de la **Guía de la CCA**
+  vía ArgAutos (`ServicioPrecios`, caché 24 h, clave `marca|modelo|anio`). El
+  LLM **nunca** genera montos. Si no se identifica o no hay referencia, la
+  respuesta es honesta (orienta a la concesionaria) — no inventa valores.
+- **Regla de oro**: no cambiar el flujo de la tasación por un prompt que pida al
+  LLM "estimar" precios; siempre componer en código con la referencia oficial.
+- **Fallback**: si Ollama está caído, chat y tasación devuelven `200` con un
+  mensaje en español que orienta al usuario (el error interno se loguea con
+  `slog`).
+
 ## Flujo de trabajo con OpenSpec
 
 OpenSpec se usa para planificar cada caso de uso antes de implementarlo. Schema:
@@ -222,6 +239,8 @@ docker compose down
 Ver `.env.example`. Para levantar local, copiar a `.env` y ajustar.
 El backend requiere: conexión a PostgreSQL (`BD_*`), puerto (`PUERTO_API`) y
 secreto JWT (`JWT_SECRETO`). El frontend usa `VITE_API_URL` para apuntar a la API.
+Para el chatbot: `OLLAMA_URL`, `MODELO_CHATBOT`, `MODELO_VISION` (modelos a
+descargar con `ollama pull`) y `ARGAUTOS_URL` (fuente de precios de la CCA).
 
 El MCP de GitHub (configurado en `.opencode/opencode.json`) autentica con un
 PAT vía `{env:GITHUB_TOKEN}`. Como opencode resuelve las variables de entorno

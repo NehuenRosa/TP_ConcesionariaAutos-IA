@@ -1,0 +1,49 @@
+# Blueprint de despliegue en Render (cloud).
+#
+# Antes de usar, reemplazar los placeholders TU-FRONTEND, TU-BACKEND y TU-POD
+# (ver docs/despliegue-nube.md). El plan free duerme los servicios web tras
+# 15 min de inactividad y el Postgres free expira a los 90 días.
+
+databases:
+  - name: concesionaria-postgres
+    databaseName: concesionaria
+    user: concesionaria
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: concesionaria-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /api/health
+    envVars:
+      - key: BD_URL
+        fromDatabase:
+          name: concesionaria-postgres
+          property: connectionString
+      - key: JWT_SECRETO
+        generateValue: true
+      - key: CORS_ORIGENES
+        value: https://TU-FRONTEND.onrender.com
+      - key: OLLAMA_URL
+        value: https://TU-POD-11434.proxy.runpod.net
+      - key: MODELO_CHATBOT
+        value: llama3
+      - key: MODELO_VISION
+        value: minicpm-v
+
+  - type: web
+    name: concesionaria-frontend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    # Render inyecta esta variable como build arg: la usa Vite en el build.
+    envVars:
+      - key: VITE_API_URL
+        value: https://TU-BACKEND.onrender.com/api

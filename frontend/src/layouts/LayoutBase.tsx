@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useNotificaciones } from '../hooks/useNotificaciones'
 import { Boton } from '../components/ui/Boton'
+import { Chatbot } from '../components/Chatbot'
 
 function Marca() {
   return (
@@ -263,6 +264,8 @@ export function LayoutBase() {
           </button>
         </div>
       )}
+
+      <Chatbot />
     </div>
   )
 }

@@ -2,7 +2,8 @@
 
 Sistema web para administrar el stock de una concesionaria de autos, con catálogo
 público, consultas y reservas de clientes, turnos de test drive, panel de
-administración y un asistente conversacional (chatbot).
+administración y un asistente conversacional (chatbot) que responde sobre el
+stock real y tasa el auto del usuario por fotos con valores de la Guía de la CCA.
 
 ## Stack
 
@@ -11,7 +12,7 @@ administración y un asistente conversacional (chatbot).
 | Backend | Go + Gin + GORM + JWT |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS |
 | Base de datos | PostgreSQL |
-| Chatbot | LangChain (langchaingo) |
+| Chatbot | LangChain (langchaingo) + Ollama (chat y visión); tasación con valores reales de la Guía de la CCA vía API de ArgAutos |
 | Infra | Docker + Docker Compose |
 
 ## Estructura del repositorio
@@ -30,7 +31,7 @@ administración y un asistente conversacional (chatbot).
 
 ### Con Docker (recomendado)
 
-Levanta PostgreSQL, backend y frontend:
+Levanta PostgreSQL, backend, frontend y Ollama (chatbot):
 
 ```powershell
 # 1. Preparar variables de entorno
@@ -38,6 +39,13 @@ Copy-Item .env.example .env
 
 # 2. Levantar los servicios
 docker compose up --build
+```
+
+Para el chatbot, descargar los modelos dentro del contenedor de Ollama (una vez):
+
+```powershell
+docker compose exec ollama ollama pull llama3
+docker compose exec ollama ollama pull minicpm-v
 ```
 
 - Frontend: `http://localhost:5173`
@@ -83,6 +91,7 @@ Ver `.env.example`. Las principales:
 |----------|-------------|-------------------|
 | `PUERTO_API` | Puerto del backend | `8080` |
 | `HOST_API` | Host donde escucha la API | `0.0.0.0` |
+| `BD_URL` | URL completa de Postgres (p. ej. Render; pisa `BD_*`) | *(vacío)* |
 | `BD_HOST` | Host de PostgreSQL | `localhost` |
 | `BD_PUERTO` | Puerto de PostgreSQL | `5432` |
 | `BD_USUARIO` | Usuario de la base | `concesionaria` |
@@ -91,8 +100,13 @@ Ver `.env.example`. Las principales:
 | `BD_SSL` | Modo SSL de la conexión | `disable` |
 | `JWT_SECRETO` | Secreto para firmar tokens JWT | `cambiar-en-produccion` |
 | `VITE_API_URL` | URL base de la API (frontend) | `http://localhost:8080/api` |
+| `OLLAMA_URL` | URL de Ollama (en Docker: `http://ollama:11434`) | `http://localhost:11434` |
+| `MODELO_CHATBOT` | Modelo de chat / comparación | `llama3` |
+| `MODELO_VISION` | Modelo de visión para la tasación por fotos | `minicpm-v` |
+| `ARGAUTOS_URL` | API de valores de la Guía de la CCA (tasación) | `https://argautos.com/api/v1` |
 
-> En producción, cambiar siempre `JWT_SECRETO`.
+> En producción, cambiar siempre `JWT_SECRETO`. Los modelos de Ollama se
+> descargan con `ollama pull <modelo>`.
 
 ## Perfiles de prueba
 
@@ -109,6 +123,18 @@ reales se definirán más adelante.
 > El rol `cliente` también se puede crear desde el registro público en
 > `http://localhost:5173/registro` con cualquier email y una contraseña de al
 > menos 8 caracteres.
+
+## Chatbot (CU-10)
+
+Asistente integrado en las páginas públicas (widget flotante) con dos endpoints:
+
+- `POST /api/chatbot/mensajes` — responde sobre el stock disponible y orienta a
+  consultar o pedir un test drive.
+- `POST /api/chatbot/tasacion` — tasación por fotos (hasta 5, JPG/PNG/WebP) +
+  `descripcion` opcional. El modelo de visión **identifica** el vehículo y el
+  valor se compone en código con la **Guía Oficial de Precios de la CCA** (vía
+  API de ArgAutos): nunca se inventan precios. Si no se identifica el vehículo o
+  no hay valor de referencia, la respuesta es honesta y orienta al usuario.
 
 ## Comandos útiles
 

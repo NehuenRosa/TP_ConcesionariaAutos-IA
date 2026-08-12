@@ -39,9 +39,19 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioTurnos := services.NuevoTurnoTestDriveService(repositorioTurnos, repositorioVehiculos)
 	handlerTurnos := handlers.NuevoTurnoTestDriveHandler(servicioTurnos)
 
+	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
+	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
+	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
+
 	api := enrutador.Group("/api")
 	{
 		api.GET("/health", handlers.Salud)
+
+		chatbot := api.Group("/chatbot")
+		{
+			chatbot.POST("/mensajes", handlerChatbot.Responder)
+			chatbot.POST("/tasacion", handlerChatbot.Tasacion)
+		}
 
 		autenticacion := api.Group("/auth")
 		{

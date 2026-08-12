@@ -8,9 +8,13 @@ import type {
 import type { DatosLogin, DatosRegistro, DatosUsuarioAdmin, RespuestaLogin, Usuario } from '../types/usuario'
 import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
+import type { PeticionChatbot, RespuestaChatbot } from '../types/chatbot'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 const CLAVE_TOKEN = 'token_concesionaria'
+// El backend espera como máximo 120s en el chatbot; 140s evita que la interfaz
+// quede "pensando" para siempre si el servidor se cuelga.
+const TIEMPO_MAXIMO_MILISEGUNDOS = 140_000
 
 export class ErrorApi extends Error {
   constructor(
@@ -35,30 +39,78 @@ export function eliminarToken(): void {
 }
 
 async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
-  const token = obtenerToken()
-  const respuesta = await fetch(`${urlBase}${ruta}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...opciones?.headers,
-    },
-    ...opciones,
-  })
+  const controlador = new AbortController()
+  const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MILISEGUNDOS)
+  try {
+    const token = obtenerToken()
+    const respuesta = await fetch(`${urlBase}${ruta}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...opciones?.headers,
+      },
+      ...opciones,
+      signal: controlador.signal,
+    })
 
-  if (!respuesta.ok) {
-    let mensaje = 'Ocurrió un error inesperado. Intente nuevamente.'
-    try {
-      const cuerpo = (await respuesta.json()) as { error?: string }
-      if (cuerpo.error) {
-        mensaje = cuerpo.error
+    if (!respuesta.ok) {
+      let mensaje = 'Ocurrió un error inesperado. Intente nuevamente.'
+      try {
+        const cuerpo = (await respuesta.json()) as { error?: string }
+        if (cuerpo.error) {
+          mensaje = cuerpo.error
+        }
+      } catch {
+        // Se ignora: se mantiene el mensaje por defecto.
       }
-    } catch {
-      // Se ignora: se mantiene el mensaje por defecto.
+      throw new ErrorApi(mensaje, respuesta.status)
     }
-    throw new ErrorApi(mensaje, respuesta.status)
-  }
 
-  return (await respuesta.json()) as T
+    return (await respuesta.json()) as T
+  } finally {
+    clearTimeout(temporizador)
+  }
+}
+
+// peticionMultipart envía un formulario multipart con fotos y un campo de texto,
+// sin fijar Content-Type para que el navegador agregue el límite del multipart.
+async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: string): Promise<T> {
+  const controlador = new AbortController()
+  const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MILISEGUNDOS)
+  try {
+    const token = obtenerToken()
+    const formulario = new FormData()
+    for (const foto of fotos) {
+      formulario.append('fotos', foto)
+    }
+    formulario.append('descripcion', descripcion)
+
+    const respuesta = await fetch(`${urlBase}${ruta}`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: formulario,
+      signal: controlador.signal,
+    })
+
+    if (!respuesta.ok) {
+      let mensaje = 'Ocurrió un error inesperado. Intente nuevamente.'
+      try {
+        const cuerpo = (await respuesta.json()) as { error?: string }
+        if (cuerpo.error) {
+          mensaje = cuerpo.error
+        }
+      } catch {
+        // Se ignora: se mantiene el mensaje por defecto.
+      }
+      throw new ErrorApi(mensaje, respuesta.status)
+    }
+
+    return (await respuesta.json()) as T
+  } finally {
+    clearTimeout(temporizador)
+  }
 }
 
 export const api = {
@@ -160,6 +212,15 @@ export const api = {
     peticion<TurnoTestDrive>(`/test-drives/${id}/cancelar`, { method: 'PUT' }),
   completarTestDrive: (id: number) =>
     peticion<TurnoTestDrive>(`/test-drives/${id}/completar`, { method: 'PUT' }),
+
+  // Chatbot
+  enviarMensajeChatbot: (datos: PeticionChatbot) =>
+    peticion<RespuestaChatbot>('/chatbot/mensajes', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  enviarTasacion: (fotos: File[], descripcion: string) =>
+    peticionMultipart<RespuestaChatbot>('/chatbot/tasacion', fotos, descripcion),
 }
 
 // construirConsultaVehiculos arma la query string del catálogo público con
