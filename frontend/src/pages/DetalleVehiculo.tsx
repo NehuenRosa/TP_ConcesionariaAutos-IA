@@ -189,6 +189,10 @@ export function DetalleVehiculo() {
                   <Link to={`/catalogo/${vehiculo.id}/test-drive`}>Solicitar test drive</Link>
                 </Boton>
 
+                <Boton variante="secundario" tamano="lg" className="w-full">
+                  <Link to={`/catalogo/${vehiculo.id}/reservar`}>Reservar este vehículo</Link>
+                </Boton>
+
                 {exitoConsulta ? (
                   <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-300">
                     <p>Consulta enviada correctamente. Un vendedor te responderá pronto.</p>

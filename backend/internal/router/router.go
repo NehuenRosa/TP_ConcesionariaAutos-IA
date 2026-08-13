@@ -39,6 +39,10 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioTurnos := services.NuevoTurnoTestDriveService(repositorioTurnos, repositorioVehiculos)
 	handlerTurnos := handlers.NuevoTurnoTestDriveHandler(servicioTurnos)
 
+	repositorioReservas := repositories.NuevoReservaRepository(base)
+	servicioReservas := services.NuevoReservaService(repositorioReservas, repositorioVehiculos)
+	handlerReservas := handlers.NuevoReservaHandler(servicioReservas)
+
 	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
 	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
 	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
@@ -125,6 +129,22 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 				gestionTestDrives.PUT("/:id/confirmar", handlerTurnos.Confirmar)
 				gestionTestDrives.PUT("/:id/cancelar", handlerTurnos.CancelarComoVendedor)
 				gestionTestDrives.PUT("/:id/completar", handlerTurnos.Completar)
+			}
+		}
+
+		reservas := api.Group("/reservas")
+		reservas.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		{
+			reservas.POST("", handlerReservas.Crear)
+			reservas.GET("/mis-reservas", handlerReservas.ListarMisReservas)
+			reservas.DELETE("/:id", handlerReservas.Cancelar)
+
+			gestionReservas := reservas.Group("")
+			gestionReservas.Use(middleware.ExigirRol("vendedor"))
+			{
+				gestionReservas.GET("", handlerReservas.Listar)
+				gestionReservas.PUT("/:id/confirmar", handlerReservas.ConfirmarVenta)
+				gestionReservas.PUT("/:id/cancelar", handlerReservas.CancelarComoVendedor)
 			}
 		}
 	}

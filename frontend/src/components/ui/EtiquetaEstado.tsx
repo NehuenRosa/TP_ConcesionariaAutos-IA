@@ -38,6 +38,18 @@ export const etiquetasEstadoVehiculo: Record<string, string> = {
   dado_de_baja: 'Dado de baja',
 }
 
+export const estilosEstadoReserva: Record<string, string> = {
+  activa: 'border-acento-400/40 bg-acento-400/10 text-acento-300',
+  vendida: 'border-emerald-400/40 bg-emerald-400/10 text-emerald-300',
+  cancelada: 'border-red-400/40 bg-red-400/10 text-red-300',
+}
+
+export const etiquetasEstadoReserva: Record<string, string> = {
+  activa: 'Activa',
+  vendida: 'Vendida',
+  cancelada: 'Cancelada',
+}
+
 export function EtiquetaEstado({ estado, estilos, etiqueta }: { estado: string; estilos: Record<string, string>; etiqueta?: string }) {
   return (
     <span

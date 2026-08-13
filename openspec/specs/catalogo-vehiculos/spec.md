@@ -95,7 +95,9 @@ El sistema SHALL ofrecer una página pública de detalle en la ruta
 `/catalogo/:id` que muestre la ficha técnica del vehículo consumiendo el
 endpoint público `GET /api/vehiculos/:id`, incluida la presentación del tipo de
 vehículo. Cuando el usuario autenticado es cliente, la página SHALL mostrar una
-acción para solicitar un test drive que enlace a la ruta `/catalogo/:id/test-drive`.
+acción para solicitar un test drive que enlace a la ruta `/catalogo/:id/test-drive`
+y una acción para reservar el vehículo que enlace a la ruta
+`/catalogo/:id/reservar`.
 
 #### Scenario: Acceso al detalle de un vehículo disponible
 
@@ -117,9 +119,27 @@ acción para solicitar un test drive que enlace a la ruta `/catalogo/:id/test-dr
 - **THEN** el sistema muestra una acción de "solicitar test drive" que enlaza a
   `/catalogo/:id/test-drive`
 
+#### Scenario: Acción de reserva para clientes
+
+- **WHEN** un cliente autenticado accede al detalle de un vehículo disponible
+- **THEN** el sistema muestra una acción de "reservar" que enlaza a
+  `/catalogo/:id/reservar`
+
 #### Scenario: Sin acción de test drive para visitantes
 
 - **WHEN** un visitante no autenticado accede al detalle de un vehículo
   disponible
 - **THEN** el sistema no muestra la acción de solicitar test drive
+
+#### Scenario: Acción de reserva para clientes
+
+- **WHEN** un cliente autenticado accede al detalle de un vehículo disponible
+- **THEN** el sistema muestra una acción de "reservar" que enlaza a
+  `/catalogo/:id/reservar`
+
+#### Scenario: Sin acción de reserva para visitantes
+
+- **WHEN** un visitante no autenticado accede al detalle de un vehículo
+  disponible
+- **THEN** el sistema no muestra la acción de reservar
 

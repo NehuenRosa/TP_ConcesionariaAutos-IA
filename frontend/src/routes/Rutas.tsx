@@ -16,6 +16,9 @@ import { ChatVendedor } from '../pages/ChatVendedor'
 import { FormularioTestDrive } from '../pages/FormularioTestDrive'
 import { MisTestDrives } from '../pages/MisTestDrives'
 import { GestionTestDrives } from '../pages/GestionTestDrives'
+import { FormularioReserva } from '../pages/FormularioReserva'
+import { MisReservas } from '../pages/MisReservas'
+import { GestionReservas } from '../pages/GestionReservas'
 import { GestionUsuarios } from '../pages/GestionUsuarios'
 
 export function Rutas() {
@@ -108,6 +111,14 @@ export function Rutas() {
           }
         />
         <Route
+          path="/vendedor/reservas"
+          element={
+            <RutaProtegida rol="vendedor">
+              <GestionReservas />
+            </RutaProtegida>
+          }
+        />
+        <Route
           path="/catalogo/:id/test-drive"
           element={
             <RutaProtegida rol="cliente">
@@ -116,10 +127,26 @@ export function Rutas() {
           }
         />
         <Route
+          path="/catalogo/:id/reservar"
+          element={
+            <RutaProtegida rol="cliente">
+              <FormularioReserva />
+            </RutaProtegida>
+          }
+        />
+        <Route
           path="/mis-test-drives"
           element={
             <RutaProtegida rol="cliente">
               <MisTestDrives />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-reservas"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisReservas />
             </RutaProtegida>
           }
         />

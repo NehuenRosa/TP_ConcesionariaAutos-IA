@@ -44,8 +44,10 @@ export function LayoutBase() {
     { a: '/catalogo', texto: 'Catálogo', mostrar: true },
     { a: '/mis-consultas', texto: 'Mis consultas', mostrar: esCliente, notificacion: esCliente },
     { a: '/mis-test-drives', texto: 'Test drives', mostrar: esCliente },
+    { a: '/mis-reservas', texto: 'Reservas', mostrar: esCliente },
     { a: '/vendedor/bandeja', texto: 'Bandeja', mostrar: esVendedor, notificacion: esVendedor },
     { a: '/vendedor/test-drives', texto: 'Test drives', mostrar: esVendedor },
+    { a: '/vendedor/reservas', texto: 'Reservas', mostrar: esVendedor },
     { a: '/admin', texto: 'Administración', mostrar: esAdministrador },
   ].filter((enlace) => enlace.mostrar)
 

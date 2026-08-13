@@ -8,6 +8,7 @@ import type {
 import type { DatosLogin, DatosRegistro, DatosUsuarioAdmin, RespuestaLogin, Usuario } from '../types/usuario'
 import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
+import type { CrearReserva, Reserva } from '../types/reserva'
 import type { PeticionChatbot, RespuestaChatbot } from '../types/chatbot'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
@@ -212,6 +213,22 @@ export const api = {
     peticion<TurnoTestDrive>(`/test-drives/${id}/cancelar`, { method: 'PUT' }),
   completarTestDrive: (id: number) =>
     peticion<TurnoTestDrive>(`/test-drives/${id}/completar`, { method: 'PUT' }),
+
+  // Reservas
+  crearReserva: (datos: CrearReserva) =>
+    peticion<Reserva>('/reservas', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  listarMisReservas: () => peticion<Reserva[]>('/reservas/mis-reservas'),
+  cancelarReserva: (id: number) =>
+    peticion<Reserva>(`/reservas/${id}`, { method: 'DELETE' }),
+  listarReservas: (estado?: string) =>
+    peticion<Reserva[]>(`/reservas${estado ? `?estado=${estado}` : ''}`),
+  confirmarReservaVenta: (id: number) =>
+    peticion<Reserva>(`/reservas/${id}/confirmar`, { method: 'PUT' }),
+  cancelarReservaVendedor: (id: number) =>
+    peticion<Reserva>(`/reservas/${id}/cancelar`, { method: 'PUT' }),
 
   // Chatbot
   enviarMensajeChatbot: (datos: PeticionChatbot) =>
