@@ -53,6 +53,7 @@ func ExigirRol(rolRequerido string) gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "No tiene permisos para acceder a este recurso",
 			})
+			c.Abort()
 			return
 		}
 
@@ -64,4 +65,5 @@ func responderNoAutorizado(c *gin.Context) {
 	c.JSON(http.StatusUnauthorized, gin.H{
 		"error": "No autorizado",
 	})
+	c.Abort()
 }

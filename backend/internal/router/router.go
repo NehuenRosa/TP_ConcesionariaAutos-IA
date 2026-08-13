@@ -43,6 +43,10 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioReservas := services.NuevoReservaService(repositorioReservas, repositorioVehiculos)
 	handlerReservas := handlers.NuevoReservaHandler(servicioReservas)
 
+	repositorioMetricas := repositories.NuevoMetricasRepository(base)
+	servicioMetricas := services.NuevoMetricasService(repositorioMetricas)
+	handlerMetricas := handlers.NuevoMetricasHandler(servicioMetricas)
+
 	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
 	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
 	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
@@ -89,6 +93,13 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 			gestionUsuarios.POST("", handlerUsuarios.Crear)
 			gestionUsuarios.PUT("/:id", handlerUsuarios.Actualizar)
 			gestionUsuarios.DELETE("/:id", handlerUsuarios.Eliminar)
+		}
+
+		metricas := api.Group("/admin/metricas")
+		metricas.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		metricas.Use(middleware.ExigirRol("administrador"))
+		{
+			metricas.GET("", handlerMetricas.ObtenerMetricas)
 		}
 
 		consultas := api.Group("/consultas")

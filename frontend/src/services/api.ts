@@ -9,6 +9,7 @@ import type { DatosLogin, DatosRegistro, DatosUsuarioAdmin, RespuestaLogin, Usua
 import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
 import type { CrearReserva, Reserva } from '../types/reserva'
+import type { Metricas } from '../types/metricas'
 import type { PeticionChatbot, RespuestaChatbot } from '../types/chatbot'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
@@ -229,6 +230,10 @@ export const api = {
     peticion<Reserva>(`/reservas/${id}/confirmar`, { method: 'PUT' }),
   cancelarReservaVendedor: (id: number) =>
     peticion<Reserva>(`/reservas/${id}/cancelar`, { method: 'PUT' }),
+
+  // Métricas del panel de administración
+  obtenerMetricas: (periodo?: number) =>
+    peticion<Metricas>(`/admin/metricas${periodo ? `?periodo=${periodo}` : ''}`),
 
   // Chatbot
   enviarMensajeChatbot: (datos: PeticionChatbot) =>

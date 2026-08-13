@@ -13,7 +13,7 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 | CU-06 | Gestión de consultas (bandeja del vendedor) | Implementado (junto con CU-05) |
 | CU-07 | Turno de test drive | Implementado |
 | CU-08 | Reserva de vehículo | Implementado |
-| CU-09 | Panel de administración (dashboard) | Pendiente |
+| CU-09 | Panel de administración (dashboard) | Implementado |
 | CU-10 | Chatbot asistente (LangChain) | Resuelto |
 
 > CU-10 resuelto: incluye tasación con valores reales de la Guía de Precios de
