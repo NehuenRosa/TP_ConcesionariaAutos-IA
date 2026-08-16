@@ -10,19 +10,31 @@ const (
 	EstadoTurnoCompletado = "completado"
 )
 
-// FranjaHoraria es una franja predefinida para los turnos de test drive.
+// FranjaHoraria es una franja de una hora para los turnos de test drive. El
+// identificador es la hora de inicio en formato "HH:MM" (ej. "10:00").
 type FranjaHoraria struct {
 	ID     string `json:"id"`
 	Inicio string `json:"inicio"`
 	Fin    string `json:"fin"`
 }
 
-// FranjasDisponibles devuelve el catálogo de franjas horarias predefinidas.
+// FranjasDisponibles devuelve el catálogo de franjas horarias de una hora en
+// horario comercial: de 09:00 a 11:00 y de 14:00 a 17:00.
 func FranjasDisponibles() []FranjaHoraria {
-	return []FranjaHoraria{
-		{ID: "manana", Inicio: "09:00", Fin: "12:00"},
-		{ID: "tarde", Inicio: "14:00", Fin: "18:00"},
+	horas := []string{"09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"}
+	franjas := make([]FranjaHoraria, 0, len(horas))
+	for _, inicio := range horas {
+		inicioT, err := time.Parse("15:04", inicio)
+		if err != nil {
+			continue
+		}
+		franjas = append(franjas, FranjaHoraria{
+			ID:     inicio,
+			Inicio: inicio,
+			Fin:    inicioT.Add(time.Hour).Format("15:04"),
+		})
 	}
+	return franjas
 }
 
 // FranjaValida indica si un identificador pertenece al catálogo de franjas.

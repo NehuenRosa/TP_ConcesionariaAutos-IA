@@ -14,7 +14,7 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 | CU-07 | Turno de test drive | Implementado |
 | CU-08 | Reserva de vehículo | Implementado |
 | CU-09 | Panel de administración (dashboard) | Implementado |
-| CU-10 | Chatbot asistente (LangChain) | Resuelto |
+| CU-10 | Chatbot asistente (LangChain + Gemini/Ollama) | Resuelto |
 
 > CU-10 resuelto: incluye tasación con valores reales de la Guía de Precios de
 > la CCA (vía API pública de ArgAutos), chat con contexto del stock disponible,

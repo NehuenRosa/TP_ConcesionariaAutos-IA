@@ -1,8 +1,9 @@
 # Blueprint de despliegue en Render (cloud).
 #
-# Antes de usar, reemplazar los placeholders TU-FRONTEND, TU-BACKEND y TU-POD
-# (ver docs/despliegue-nube.md). El plan free duerme los servicios web tras
-# 15 min de inactividad y el Postgres free expira a los 90 días.
+# Antes de usar, reemplazar los placeholders TU-FRONTEND, TU-BACKEND y cargar
+# GOOGLE_API_KEY en el panel (ver docs/despliegue-nube.md). El plan free
+# duerme los servicios web tras 15 min de inactividad y el Postgres free
+# expira a los 90 días.
 
 databases:
   - name: concesionaria-postgres
@@ -29,12 +30,14 @@ services:
         generateValue: true
       - key: CORS_ORIGENES
         value: https://TU-FRONTEND.onrender.com
-      - key: OLLAMA_URL
-        value: https://TU-POD-11434.proxy.runpod.net
-      - key: MODELO_CHATBOT
-        value: llama3
-      - key: MODELO_VISION
-        value: minicpm-v
+      # LLM en la nube: Google AI Gemini (gratis, texto + visión). La clave se
+      # crea en https://aistudio.google.com y se pega en el panel de Render
+      # (no en el blueprint, para no exponerla en el repo).
+      - key: PROVEEDOR_LLM
+        value: googleai
+      - key: GOOGLE_API_KEY
+        value: TU-GOOGLE-API-KEY
+        sync: false
 
   - type: web
     name: concesionaria-frontend

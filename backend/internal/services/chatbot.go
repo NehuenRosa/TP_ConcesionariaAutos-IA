@@ -13,6 +13,7 @@ import (
 	"concesionaria/backend/internal/repositories"
 
 	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/ollama"
 )
 
@@ -78,19 +79,42 @@ type ChatbotService interface {
 	Tasacion(ctx context.Context, descripcion string, imagenes []ImagenTasacion) (string, error)
 }
 
-// chatbotService implementa ChatbotService con LangChain y Ollama.
+// Proveedores de LLM soportados.
+const (
+	// ProveedorGoogleAI usa Gemini en la nube (recomendado: no consume
+	// recursos locales y ofrece contexto de 1M de tokens).
+	ProveedorGoogleAI = "googleai"
+	// ProveedorOllama usa un modelo local vía Ollama.
+	ProveedorOllama = "ollama"
+)
+
+// chatbotService implementa ChatbotService con LangChain y un LLM provisto por
+// Google AI (Gemini, en la nube) u Ollama (local).
 type chatbotService struct {
 	repositorioVehiculos repositories.VehiculoRepository
+	proveedor            string
+	googleAIKey          string
 	ollamaURL            string
 	modeloChatbot        string
 	modeloVision         string
 	precios              ServicioPrecios
 }
 
-// NuevoChatbotService crea el servicio del asistente conversacional.
-func NuevoChatbotService(repositorioVehiculos repositories.VehiculoRepository, ollamaURL string, modeloChatbot string, modeloVision string, precios ServicioPrecios) ChatbotService {
+// NuevoChatbotService crea el servicio del asistente conversacional. Si
+// proveedor está vacío, elige Google AI cuando hay clave configurada y Ollama
+// como respaldo.
+func NuevoChatbotService(repositorioVehiculos repositories.VehiculoRepository, proveedor string, googleAIKey string, ollamaURL string, modeloChatbot string, modeloVision string, precios ServicioPrecios) ChatbotService {
+	if proveedor == "" {
+		if googleAIKey != "" {
+			proveedor = ProveedorGoogleAI
+		} else {
+			proveedor = ProveedorOllama
+		}
+	}
 	return &chatbotService{
 		repositorioVehiculos: repositorioVehiculos,
+		proveedor:            proveedor,
+		googleAIKey:          googleAIKey,
 		ollamaURL:            ollamaURL,
 		modeloChatbot:        modeloChatbot,
 		modeloVision:         modeloVision,
@@ -360,10 +384,21 @@ func capitalizar(texto string) string {
 	return strings.ToUpper(texto[:1]) + texto[1:]
 }
 
-// generar conecta con Ollama y devuelve la respuesta de texto del modelo.
-// numCtx acota la ventana de contexto del request y keepAlive mantiene el
-// modelo cargado en memoria entre consultas.
+// generar despacha la generación al proveedor de LLM configurado. numCtx solo
+// aplica a Ollama (ventana de contexto local); en la nube se ignora.
 func (s *chatbotService) generar(ctx context.Context, modelo string, mensajes []llms.MessageContent, numCtx int, timeout time.Duration) (string, error) {
+	switch s.proveedor {
+	case ProveedorGoogleAI:
+		return s.generarConGoogleAI(ctx, modelo, mensajes, timeout)
+	default:
+		return s.generarConOllama(ctx, modelo, mensajes, numCtx, timeout)
+	}
+}
+
+// generarConOllama conecta con Ollama y devuelve la respuesta de texto del
+// modelo local. keepAlive mantiene el modelo cargado en memoria entre
+// consultas para reducir latencia.
+func (s *chatbotService) generarConOllama(ctx context.Context, modelo string, mensajes []llms.MessageContent, numCtx int, timeout time.Duration) (string, error) {
 	modeloLocal, err := ollama.New(
 		ollama.WithServerURL(s.ollamaURL),
 		ollama.WithModel(modelo),
@@ -378,6 +413,31 @@ func (s *chatbotService) generar(ctx context.Context, modelo string, mensajes []
 	defer cancelar()
 
 	respuesta, err := modeloLocal.GenerateContent(ctxConTimeout, mensajes, llms.WithMaxTokens(MaxTokensSalida))
+	if err != nil {
+		return "", err
+	}
+	if len(respuesta.Choices) == 0 || strings.TrimSpace(respuesta.Choices[0].Content) == "" {
+		return "", errors.New("el modelo no devolvió contenido")
+	}
+	return strings.TrimSpace(respuesta.Choices[0].Content), nil
+}
+
+// generarConGoogleAI genera con Gemini en la nube. El mismo modelo soporta
+// texto y visión, por eso el mismo camino sirve para el chat y la tasación.
+func (s *chatbotService) generarConGoogleAI(ctx context.Context, modelo string, mensajes []llms.MessageContent, timeout time.Duration) (string, error) {
+	modeloNube, err := googleai.New(ctx, googleai.WithAPIKey(s.googleAIKey))
+	if err != nil {
+		return "", fmt.Errorf("crear cliente de Google AI: %w", err)
+	}
+	defer modeloNube.Close()
+
+	ctxConTimeout, cancelar := context.WithTimeout(ctx, timeout)
+	defer cancelar()
+
+	respuesta, err := modeloNube.GenerateContent(ctxConTimeout, mensajes,
+		llms.WithModel(modelo),
+		llms.WithMaxTokens(MaxTokensSalida),
+	)
 	if err != nil {
 		return "", err
 	}

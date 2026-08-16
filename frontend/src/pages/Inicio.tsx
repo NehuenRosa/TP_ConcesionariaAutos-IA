@@ -6,6 +6,7 @@ import type { ConsultaResumen } from '../types/consulta'
 import type { TurnoTestDrive } from '../types/testDrive'
 import { Boton } from '../components/ui/Boton'
 import { ContenidoCargando } from '../components/ui/Spinner'
+import { formatearFranja } from '../utils/formato'
 import {
   EtiquetaEstado,
   estilosEstadoConsulta,
@@ -27,7 +28,7 @@ const VALORES = [
   },
   {
     titulo: 'Test drive',
-    descripcion: 'Agendá una prueba de manejo en la fecha y franja horaria que más te convenga.',
+    descripcion: 'Agendá una prueba de manejo en la fecha y hora que más te convenga.',
   },
   {
     titulo: 'Asistente digital',
@@ -117,7 +118,7 @@ function HeroCliente() {
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-plata-300 sm:text-lg">
             Seguí explorando el catálogo, revisá tus consultas o agendá un test drive
-            en la franja horaria que prefieras.
+            en el horario que prefieras.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Boton tamano="lg">
@@ -193,7 +194,7 @@ function SeccionCategorias() {
 }
 
 function etiquetaFranja(franja: string): string {
-  return franja === 'manana' ? 'Mañana' : 'Tarde'
+  return formatearFranja(franja)
 }
 
 function HomeVendedor() {

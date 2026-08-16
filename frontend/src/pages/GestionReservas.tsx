@@ -34,22 +34,28 @@ export function GestionReservas() {
   const [error, setError] = useState<string | null>(null)
   const [accionId, setAccionId] = useState<number | null>(null)
 
-  const cargarReservas = useCallback(async () => {
-    try {
-      const datos = await api.listarReservas(filtro || undefined)
-      setReservas(datos)
-      setError(null)
-    } catch (e: unknown) {
-      setError(e instanceof ErrorApi ? e.message : 'Error al cargar las reservas')
-    } finally {
-      setCargando(false)
-    }
-  }, [filtro])
+  const cargarReservas = useCallback(
+    async (filtroSolicitado: EstadoReserva | '' = filtro) => {
+      try {
+        const datos = await api.listarReservas(filtroSolicitado || undefined)
+        // Ignorar respuestas obsoletas si el filtro cambió mientras volvía.
+        if (filtroSolicitado !== filtro) return
+        setReservas(datos)
+        setError(null)
+      } catch (e: unknown) {
+        if (filtroSolicitado !== filtro) return
+        setError(e instanceof ErrorApi ? e.message : 'Error al cargar las reservas')
+      } finally {
+        if (filtroSolicitado === filtro) setCargando(false)
+      }
+    },
+    [filtro],
+  )
 
   useEffect(() => {
     setCargando(true)
-    cargarReservas()
-  }, [cargarReservas])
+    void cargarReservas(filtro)
+  }, [cargarReservas, filtro])
 
   const ejecutarAccion = async (reserva: Reserva, accion: 'confirmar' | 'cancelar') => {
     if (accion === 'cancelar' && !window.confirm(`¿Cancelar la reserva de ${reserva.cliente.nombre}?`)) {

@@ -48,7 +48,7 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	handlerMetricas := handlers.NuevoMetricasHandler(servicioMetricas)
 
 	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
-	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
+	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.ProveedorLLM, configuracion.GoogleAIKey, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
 	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
 
 	api := enrutador.Group("/api")
@@ -107,15 +107,20 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		{
 			consultas.POST("", handlerConsultas.Crear)
 			consultas.GET("/mis-consultas", handlerConsultas.ListarMisConsultas)
-			consultas.GET("/bandeja", handlerConsultas.ListarBandeja)
-			consultas.PUT("/:id/tomar", handlerConsultas.Tomar)
-			consultas.PUT("/:id/cerrar", handlerConsultas.Cerrar)
-			consultas.DELETE("/:id", handlerConsultas.Eliminar)
 
 			consultas.GET("/:id/mensajes", handlerMensajes.ObtenerMensajes)
 			consultas.GET("/:id/mensajes/nuevos", handlerMensajes.ObtenerNuevos)
 			consultas.POST("/:id/mensajes", handlerMensajes.Enviar)
 			consultas.PUT("/:id/mensajes/leidos", handlerMensajes.MarcarLeidos)
+
+			gestionConsultas := consultas.Group("")
+			gestionConsultas.Use(middleware.ExigirRol("vendedor"))
+			{
+				gestionConsultas.GET("/bandeja", handlerConsultas.ListarBandeja)
+				gestionConsultas.PUT("/:id/tomar", handlerConsultas.Tomar)
+				gestionConsultas.PUT("/:id/cerrar", handlerConsultas.Cerrar)
+				gestionConsultas.DELETE("/:id", handlerConsultas.Eliminar)
+			}
 		}
 
 		notificaciones := api.Group("/notificaciones")

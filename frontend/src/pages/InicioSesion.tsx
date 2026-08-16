@@ -22,8 +22,9 @@ export function InicioSesion() {
 
     try {
       await iniciarSesion({ email, password })
-      const desde = (ubicacion.state as { desde?: { pathname?: string } } | null)?.desde
-      navigate(desde?.pathname ?? '/')
+      const desde = (ubicacion.state as { desde?: { pathname?: string; search?: string; hash?: string } } | null)?.desde
+      const destino = desde ? `${desde.pathname ?? ''}${desde.search ?? ''}${desde.hash ?? ''}` : '/'
+      navigate(destino || '/')
     } catch (e: unknown) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo iniciar sesión.')
       setEnviando(false)

@@ -1,0 +1,6 @@
+# Reducir el contexto de build y evitar filtrar archivos locales
+.git
+.gitignore
+bin/
+*.log
+Dockerfile

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { Vehiculo } from '../types/vehiculo'
@@ -14,6 +14,7 @@ export function FormularioReserva() {
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [reservaCreada, setReservaCreada] = useState(false)
+  const enviandoRef = useRef(false)
 
   useEffect(() => {
     if (!id) return
@@ -39,8 +40,10 @@ export function FormularioReserva() {
   }, [id])
 
   const handleReservar = async () => {
-    if (!vehiculo) return
+    if (!vehiculo || enviandoRef.current) return
 
+    // Guard síncrono: evita que dos clics rápidos disparen dos reservas.
+    enviandoRef.current = true
     setEnviando(true)
     setErrorEnvio(null)
 
@@ -50,6 +53,7 @@ export function FormularioReserva() {
     } catch (e: unknown) {
       setErrorEnvio(e instanceof ErrorApi ? e.message : 'No se pudo reservar el vehículo')
     } finally {
+      enviandoRef.current = false
       setEnviando(false)
     }
   }

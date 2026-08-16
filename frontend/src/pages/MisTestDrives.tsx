@@ -11,6 +11,7 @@ import {
   etiquetasEstadoTestDrive,
   EtiquetaEstado,
 } from '../components/ui/EtiquetaEstado'
+import { formatearFranja } from '../utils/formato'
 
 function formatearFecha(fecha: string): string {
   return new Date(`${fecha}T00:00:00`).toLocaleDateString('es-AR', {
@@ -122,7 +123,7 @@ export function MisTestDrives() {
                   </Link>
                   <p className="mt-1 text-sm text-plata-400">
                     {formatearFecha(turno.fecha)} ·{' '}
-                    <span className="text-plata-300 capitalize">{turno.franja}</span>
+                    <span className="text-plata-300">{formatearFranja(turno.franja)}</span>
                   </p>
                   <div className="mt-2">
                     <EtiquetaEstado

@@ -17,8 +17,10 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
   const [cargando, setCargando] = useState(true)
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [intento, setIntento] = useState(0)
   const mensajesRef = useRef<HTMLDivElement>(null)
   const ultimoTimestampRef = useRef<string>('')
+  const consultaIdRef = useRef(consultaId)
 
   const scrollToBottom = () => {
     if (mensajesRef.current) {
@@ -28,6 +30,8 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
 
   useEffect(() => {
     let cancelado = false
+    consultaIdRef.current = consultaId
+    ultimoTimestampRef.current = ''
 
     const cargarMensajes = async () => {
       try {
@@ -56,43 +60,48 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
     return () => {
       cancelado = true
     }
-  }, [consultaId])
+  }, [consultaId, intento])
 
   useEffect(() => {
     scrollToBottom()
   }, [mensajes])
 
   useEffect(() => {
+    consultaIdRef.current = consultaId
     if (estado === 'cerrada') return
 
     const intervalo = setInterval(async () => {
       if (!ultimoTimestampRef.current) return
 
+      const idActual = consultaIdRef.current
       try {
-        const nuevos = await api.obtenerMensajesNuevos(consultaId, ultimoTimestampRef.current)
-        if (nuevos.length > 0) {
-          const mensajesDeOtros = nuevos.filter((m) => m.remitente.id !== usuario?.id)
-          if (mensajesDeOtros.length > 0) {
-            api.marcarComoLeidos(consultaId).then(() => {
-              window.dispatchEvent(new Event('mensajes-leidos'))
-            }).catch(() => {})
-          }
+        const nuevos = await api.obtenerMensajesNuevos(idActual, ultimoTimestampRef.current)
+        // Si el usuario navegó a otra conversación mientras volvía la
+        // respuesta, se descarta para no ensuciar la conversación actual.
+        if (consultaIdRef.current !== idActual) return
+        if (nuevos.length === 0) return
 
-          setMensajes((prev) => {
-            const idsExistentes = new Set(prev.map((m) => m.id))
-            const mensajesNuevos = nuevos.filter((m) => !idsExistentes.has(m.id))
-            if (mensajesNuevos.length === 0) return prev
-            ultimoTimestampRef.current = mensajesNuevos[mensajesNuevos.length - 1].createdAt
-            return [...prev, ...mensajesNuevos]
-          })
+        const mensajesDeOtros = nuevos.filter((m) => m.remitente.id !== usuario?.id)
+        if (mensajesDeOtros.length > 0) {
+          api.marcarComoLeidos(idActual).then(() => {
+            window.dispatchEvent(new Event('mensajes-leidos'))
+          }).catch(() => {})
         }
+
+        setMensajes((prev) => {
+          const idsExistentes = new Set(prev.map((m) => m.id))
+          const mensajesNuevos = nuevos.filter((m) => !idsExistentes.has(m.id))
+          if (mensajesNuevos.length === 0) return prev
+          return [...prev, ...mensajesNuevos]
+        })
+        ultimoTimestampRef.current = nuevos[nuevos.length - 1].createdAt
       } catch {
         // Ignorar errores de polling
       }
     }, 5000)
 
     return () => clearInterval(intervalo)
-  }, [consultaId, estado])
+  }, [consultaId, estado, usuario?.id])
 
   const handleEnviar = async () => {
     if (!nuevoMensaje.trim() || enviando) return
@@ -102,7 +111,12 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
 
     try {
       const mensaje = await api.enviarMensaje(consultaId, nuevoMensaje.trim())
-      setMensajes((prev) => [...prev, mensaje])
+      // Deduplicar por id: un poll en vuelo pudo haber agregado este mensaje
+      // antes de que el POST responda.
+      setMensajes((prev) => {
+        if (prev.some((m) => m.id === mensaje.id)) return prev
+        return [...prev, mensaje]
+      })
       ultimoTimestampRef.current = mensaje.createdAt
       setNuevoMensaje('')
       onMensajeEnviado?.()
@@ -142,6 +156,19 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
         {error && (
           <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
             {error}
+            {mensajes.length === 0 && !cargando && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCargando(true)
+                  setError(null)
+                  setIntento((actual) => actual + 1)
+                }}
+                className="ml-2 font-semibold text-red-200 underline underline-offset-4 hover:text-red-100"
+              >
+                Reintentar
+              </button>
+            )}
           </div>
         )}
 

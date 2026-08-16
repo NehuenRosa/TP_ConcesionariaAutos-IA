@@ -24,6 +24,10 @@ type ConsultaRepository interface {
 	// ListarPorUsuario devuelve las consultas donde el usuario participa
 	// como cliente o vendedor.
 	ListarPorUsuario(ctx context.Context, usuarioID uint) ([]uint, error)
+	// TomarSiPendiente asigna el vendedor a una consulta solo si sigue
+	// pendiente. Devuelve false si otro vendedor la tomó antes (UPDATE atómico
+	// para evitar carreras entre dos vendedores).
+	TomarSiPendiente(ctx context.Context, consultaID uint, vendedorID uint) (bool, error)
 	// Actualizar actualiza el estado y el vendedor de una consulta.
 	Actualizar(ctx context.Context, consulta *models.Consulta) (*models.Consulta, error)
 	// Eliminar elimina una consulta y sus mensajes.
@@ -141,6 +145,21 @@ func (r *consultaRepository) ListarPendientes(ctx context.Context) ([]models.Con
 		return nil, fmt.Errorf("listar consultas pendientes: %w", err)
 	}
 	return consultas, nil
+}
+
+// TomarSiPendiente asigna el vendedor a la consulta solo si sigue pendiente.
+func (r *consultaRepository) TomarSiPendiente(ctx context.Context, consultaID uint, vendedorID uint) (bool, error) {
+	resultado := r.base.WithContext(ctx).
+		Model(&models.Consulta{}).
+		Where("id = ? AND estado = ? AND vendedor_id IS NULL", consultaID, models.EstadoPendiente).
+		Updates(map[string]any{
+			"vendedor_id": vendedorID,
+			"estado":      models.EstadoEnConversacion,
+		})
+	if resultado.Error != nil {
+		return false, fmt.Errorf("tomar consulta: %w", resultado.Error)
+	}
+	return resultado.RowsAffected > 0, nil
 }
 
 // Actualizar actualiza el estado y opcionalmente el vendedor de una consulta.

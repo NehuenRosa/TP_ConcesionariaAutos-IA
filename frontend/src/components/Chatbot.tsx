@@ -4,6 +4,7 @@ import type { TurnoChat } from '../types/chatbot'
 import { Boton } from './ui/Boton'
 
 const MAXIMO_FOTOS = 5
+const TAMANO_MAXIMO_MB = 5
 const FORMATOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp']
 const EXTENSIONES_PERMITIDAS = ['jpg', 'jpeg', 'png', 'webp']
 
@@ -13,6 +14,8 @@ const esImagenAceptada = (archivo: File): boolean => {
   return EXTENSIONES_PERMITIDAS.includes(extension)
 }
 
+type FotoConUrl = { archivo: File; url: string }
+
 export function Chatbot() {
   const [abierto, setAbierto] = useState(false)
   const [modo, setModo] = useState<'chat' | 'tasacion'>('chat')
@@ -20,11 +23,34 @@ export function Chatbot() {
   const [entrada, setEntrada] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [fotos, setFotos] = useState<File[]>([])
+  const [fotos, setFotos] = useState<FotoConUrl[]>([])
   const [descripcion, setDescripcion] = useState('')
   const mensajesRef = useRef<HTMLDivElement>(null)
   const entradaRef = useRef<HTMLTextAreaElement>(null)
   const descripcionRef = useRef<HTMLInputElement>(null)
+  const urlsCreadasRef = useRef<string[]>([])
+  const enviandoRef = useRef(false)
+
+  const crearUrl = (archivo: File): string => {
+    const url = URL.createObjectURL(archivo)
+    urlsCreadasRef.current.push(url)
+    return url
+  }
+
+  const revocarUrl = (url: string) => {
+    const indice = urlsCreadasRef.current.indexOf(url)
+    if (indice !== -1) {
+      urlsCreadasRef.current.splice(indice, 1)
+    }
+    URL.revokeObjectURL(url)
+  }
+
+  useEffect(() => {
+    return () => {
+      urlsCreadasRef.current.forEach((url) => URL.revokeObjectURL(url))
+      urlsCreadasRef.current = []
+    }
+  }, [])
 
   useEffect(() => {
     if (mensajesRef.current) {
@@ -44,8 +70,9 @@ export function Chatbot() {
 
   const enviarMensaje = async () => {
     const mensaje = entrada.trim()
-    if (!mensaje || cargando) return
+    if (!mensaje || enviandoRef.current) return
 
+    enviandoRef.current = true
     setCargando(true)
     setError(null)
     setEntrada('')
@@ -61,23 +88,26 @@ export function Chatbot() {
     } catch (e: unknown) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo enviar el mensaje')
     } finally {
+      enviandoRef.current = false
       setCargando(false)
     }
   }
 
   const enviarTasacion = async () => {
-    if (fotos.length === 0 || cargando) return
+    if (fotos.length === 0 || enviandoRef.current) return
 
+    enviandoRef.current = true
     setCargando(true)
     setError(null)
 
     try {
-      const respuesta = await api.enviarTasacion(fotos, descripcion)
+      const respuesta = await api.enviarTasacion(fotos.map((foto) => foto.archivo), descripcion)
       setMensajes((m) => [
         ...m,
         { rol: 'usuario', contenido: `Tasación de mi auto (${fotos.length} foto${fotos.length > 1 ? 's' : ''})` },
         { rol: 'asistente', contenido: respuesta.respuesta },
       ])
+      fotos.forEach((foto) => revocarUrl(foto.url))
       setFotos([])
       setDescripcion('')
     } catch (e: unknown) {
@@ -87,6 +117,7 @@ export function Chatbot() {
         setError(e instanceof ErrorApi ? e.message : 'No se pudo realizar la tasación')
       }
     } finally {
+      enviandoRef.current = false
       setCargando(false)
     }
   }
@@ -94,15 +125,32 @@ export function Chatbot() {
   const agregarFotos = (archivos: FileList | null) => {
     if (!archivos) return
     setError(null)
-    const nuevas: File[] = []
+    const nuevas: FotoConUrl[] = []
     for (const archivo of Array.from(archivos)) {
       if (!esImagenAceptada(archivo)) {
         setError('Formato no soportado: se aceptan JPG, PNG o WebP')
         continue
       }
-      nuevas.push(archivo)
+      if (archivo.size > TAMANO_MAXIMO_MB * 1024 * 1024) {
+        setError(`Cada foto debe pesar menos de ${TAMANO_MAXIMO_MB} MB`)
+        continue
+      }
+      nuevas.push({ archivo, url: crearUrl(archivo) })
     }
-    setFotos((f) => [...f, ...nuevas].slice(0, MAXIMO_FOTOS))
+    setFotos((actuales) => {
+      const combinadas = [...actuales, ...nuevas]
+      const sobrantes = combinadas.slice(MAXIMO_FOTOS)
+      sobrantes.forEach((foto) => revocarUrl(foto.url))
+      return combinadas.slice(0, MAXIMO_FOTOS)
+    })
+  }
+
+  const quitarFoto = (indice: number) => {
+    setFotos((actuales) => {
+      const objetivo = actuales[indice]
+      if (objetivo) revocarUrl(objetivo.url)
+      return actuales.filter((_, i) => i !== indice)
+    })
   }
 
   const seleccionarModo = (nuevoModo: 'chat' | 'tasacion') => {
@@ -230,15 +278,15 @@ export function Chatbot() {
               <div className="mb-3 space-y-2">
                 <div className="flex flex-wrap gap-2">
                   {fotos.map((foto, indice) => (
-                    <div key={`${foto.name}-${indice}`} className="relative">
+                    <div key={`${foto.archivo.name}-${indice}`} className="relative">
                       <img
-                        src={URL.createObjectURL(foto)}
-                        alt={foto.name}
+                        src={foto.url}
+                        alt={foto.archivo.name}
                         className="h-14 w-14 rounded-lg border border-white/10 object-cover"
                       />
                       <button
                         type="button"
-                        onClick={() => setFotos((f) => f.filter((_, i) => i !== indice))}
+                        onClick={() => quitarFoto(indice)}
                         className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white"
                         aria-label="Quitar foto"
                       >

@@ -64,9 +64,15 @@ export function AdminVehiculos() {
 
     try {
       await api.darDeBajaVehiculo(id)
-      setVehiculos((actuales) =>
-        actuales.map((v) => (v.id === id ? { ...v, estado: 'dado_de_baja' } : v)),
-      )
+      setError(null)
+      if (filtroEstado && filtroEstado !== 'dado_de_baja') {
+        // Con un filtro activo que ya no matchea, la fila debe desaparecer.
+        setVehiculos((actuales) => actuales.filter((v) => v.id !== id))
+      } else {
+        setVehiculos((actuales) =>
+          actuales.map((v) => (v.id === id ? { ...v, estado: 'dado_de_baja' } : v)),
+        )
+      }
     } catch (e: unknown) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo dar de baja el vehículo.')
     }

@@ -12,40 +12,56 @@ stock real y tasa el auto del usuario por fotos con valores de la Guía de la CC
 | Backend | Go + Gin + GORM + JWT |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS |
 | Base de datos | PostgreSQL |
-| Chatbot | LangChain (langchaingo) + Ollama (chat y visión); tasación con valores reales de la Guía de la CCA vía API de ArgAutos |
+| Chatbot | LangChain (langchaingo) conectado a **Google AI Gemini en la nube** (`googleai`, por defecto) u **Ollama local** como respaldo (`ollama`); tasación con valores reales de la Guía de la CCA vía API de ArgAutos |
 | Infra | Docker + Docker Compose |
 
 ## Estructura del repositorio
 
 ```
-├── backend/     # API REST en Go (Gin + GORM, capas handler/service/repository)
-├── frontend/    # Aplicación web en React (Vite + TypeScript + TailwindCSS)
-├── openspec/    # Especificaciones y changes planificados (OpenSpec)
-├── docs/        # Documentación (roadmap, decisiones)
-├── docker-compose.yml
-├── .env.example # Variables de entorno de ejemplo
-└── AGENTS.md    # Guía de contexto para agentes de IA
+├── backend/                 # API REST en Go
+│   ├── cmd/api/             # Punto de entrada (main)
+│   └── internal/
+│       ├── config/          # Carga de configuración desde variables de entorno
+│       ├── database/        # Conexión GORM + auto-migración + seed
+│       ├── models/          # Entidades / modelos de GORM
+│       ├── handlers/        # Handlers HTTP (parsean request/response)
+│       ├── services/        # Lógica de negocio
+│       ├── repositories/    # Acceso a datos (GORM)
+│       ├── middleware/      # CORS, autenticación JWT, roles
+│       ├── router/          # Registro de rutas
+│       └── token/           # Utilidades de JWT
+├── frontend/                # Aplicación web en React
+│   └── src/
+│       ├── components/      # Componentes reutilizables (Chatbot, UI)
+│       ├── layouts/         # Layout base (header/footer)
+│       ├── pages/           # Páginas por ruta
+│       ├── routes/          # Definición de rutas (React Router)
+│       ├── services/        # Cliente HTTP centralizado (api.ts)
+│       ├── types/           # Tipos TypeScript compartidos
+│       ├── hooks/           # Hooks personalizados (useAuth, useNotificaciones)
+│       ├── utils/           # Utilidades de formato
+│       └── test/            # Setup de tests (Vitest + Testing Library)
+├── openspec/                # OpenSpec: specs + changes (uno por CU)
+├── docs/                    # Documentación (roadmap, despliegue, API, frontend)
+├── docker-compose.yml       # postgres + backend + frontend (+ ollama opcional)
+├── .env.example             # Variables de entorno de ejemplo
+├── AGENTS.md                # Guía de contexto para agentes de IA
+└── render.yaml              # Blueprint de despliegue en Render (nube)
 ```
 
 ## Cómo levantar el proyecto
 
 ### Con Docker (recomendado)
 
-Levanta PostgreSQL, backend, frontend y Ollama (chatbot):
+Levanta PostgreSQL, backend y frontend. El chatbot usa **Gemini en la nube** si
+configuraste `GOOGLE_API_KEY`, o el **Ollama nativo del host** como respaldo.
 
 ```powershell
-# 1. Preparar variables de entorno
+# 1. Preparar variables de entorno (editar y completar BD_PASSWORD y JWT_SECRETO)
 Copy-Item .env.example .env
 
 # 2. Levantar los servicios
 docker compose up --build
-```
-
-Para el chatbot, descargar los modelos dentro del contenedor de Ollama (una vez):
-
-```powershell
-docker compose exec ollama ollama pull llama3
-docker compose exec ollama ollama pull minicpm-v
 ```
 
 - Frontend: `http://localhost:5173`
@@ -59,6 +75,19 @@ docker compose down
 # Para borrar también los datos de la base:
 docker compose down -v
 ```
+
+> **Ollama opcional**: por defecto el backend usa el Ollama nativo del host
+> (`http://host.docker.internal:11434`), sin contenedores extra. Si preferís
+> Ollama en contenedor (con GPU, requiere NVIDIA Container Toolkit), levantarlo
+> aparte:
+>
+> ```powershell
+> docker compose --profile ollama-contenedor up -d
+> ```
+>
+> Los modelos se descargan una vez con `ollama pull llama3` y
+> `ollama pull minicpm-v` (nativo) o `docker compose --profile ollama-contenedor
+> exec ollama ollama pull ...` (contenedor).
 
 ### Sin Docker
 
@@ -95,18 +124,24 @@ Ver `.env.example`. Las principales:
 | `BD_HOST` | Host de PostgreSQL | `localhost` |
 | `BD_PUERTO` | Puerto de PostgreSQL | `5432` |
 | `BD_USUARIO` | Usuario de la base | `concesionaria` |
-| `BD_PASSWORD` | Contraseña de la base | `concesionaria` |
+| `BD_PASSWORD` | Contraseña de la base (**obligatoria** en compose) | `concesionaria` |
 | `BD_NOMBRE` | Nombre de la base | `concesionaria` |
 | `BD_SSL` | Modo SSL de la conexión | `disable` |
-| `JWT_SECRETO` | Secreto para firmar tokens JWT | `cambiar-en-produccion` |
-| `VITE_API_URL` | URL base de la API (frontend) | `http://localhost:8080/api` |
-| `OLLAMA_URL` | URL de Ollama (en Docker: `http://ollama:11434`) | `http://localhost:11434` |
-| `MODELO_CHATBOT` | Modelo de chat / comparación | `llama3` |
-| `MODELO_VISION` | Modelo de visión para la tasación por fotos | `minicpm-v` |
+| `JWT_SECRETO` | Secreto para firmar tokens JWT (**obligatorio** en compose) | `cambiar-en-produccion` |
+| `CORS_ORIGENES` | Orígenes permitidos por CORS | `*` |
+| `PROVEEDOR_LLM` | `googleai` (nube) u `ollama` (local); vacío = googleai si hay `GOOGLE_API_KEY`, si no ollama | *(vacío)* |
+| `GOOGLE_API_KEY` | API key de Gemini (gratis en Google AI Studio) | *(vacío)* |
+| `OLLAMA_URL` | URL de Ollama (en Docker: `http://host.docker.internal:11434`) | `http://localhost:11434` |
+| `MODELO_CHATBOT` | Modelo de chat / comparación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `llama3` |
+| `MODELO_VISION` | Modelo de visión para la tasación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `minicpm-v` |
 | `ARGAUTOS_URL` | API de valores de la Guía de la CCA (tasación) | `https://argautos.com/api/v1` |
+| `VITE_API_URL` | URL base de la API (frontend) | `http://localhost:8080/api` |
 
-> En producción, cambiar siempre `JWT_SECRETO`. Los modelos de Ollama se
-> descargan con `ollama pull <modelo>`.
+> En producción, cambiar siempre `JWT_SECRETO` y no exponer `GOOGLE_API_KEY` en
+> el repositorio (vive solo en `.env` local o en variables de Render). El
+> backend elige el modelo por defecto según el proveedor: googleai →
+> `gemini-flash-lite-latest` (1M de contexto, texto + visión, gratis para
+> cuentas nuevas), ollama → `llama3` (chat) y `minicpm-v` (visión).
 
 ## Perfiles de prueba
 
@@ -126,15 +161,32 @@ reales se definirán más adelante.
 
 ## Chatbot (CU-10)
 
-Asistente integrado en las páginas públicas (widget flotante) con dos endpoints:
+Asistente integrado en las páginas públicas (widget flotante) con dos endpoints
+públicos (sin autenticación):
 
-- `POST /api/chatbot/mensajes` — responde sobre el stock disponible y orienta a
-  consultar o pedir un test drive.
+- `POST /api/chatbot/mensajes` — chat con historial; responde sobre el stock
+  disponible y orienta a consultar o pedir un test drive.
 - `POST /api/chatbot/tasacion` — tasación por fotos (hasta 5, JPG/PNG/WebP) +
-  `descripcion` opcional. El modelo de visión **identifica** el vehículo y el
-  valor se compone en código con la **Guía Oficial de Precios de la CCA** (vía
-  API de ArgAutos): nunca se inventan precios. Si no se identifica el vehículo o
-  no hay valor de referencia, la respuesta es honesta y orienta al usuario.
+  `descripcion` opcional. El modelo de visión solo **identifica** el vehículo
+  (`{marca, modelo, anio, estado, kilometraje}`) y el valor se compone en código
+  con la **Guía Oficial de Precios de la CCA** (vía API de ArgAutos, caché de
+  24 h): el LLM nunca genera montos. Si no se identifica el vehículo o no hay
+  valor de referencia, la respuesta es honesta y orienta al usuario.
+
+**Proveedores**: por defecto **Gemini en la nube** (`googleai`, clave
+`GOOGLE_API_KEY`, modelo `gemini-flash-lite-latest`). Si no hay clave o se setea
+`PROVEEDOR_LLM=ollama`, usa **Ollama local** como respaldo. Si el proveedor está
+caído, chat y tasación devuelven `200` con un mensaje en español que orienta al
+usuario (el error interno se loguea).
+
+## Documentación detallada
+
+- `docs/api.md` — referencia completa de la API REST (endpoints, métodos, roles, payloads).
+- `docs/frontend.md` — rutas, páginas, componentes y estructura del frontend.
+- `docs/despliegue-nube.md` — cómo desplegar en Render.
+- `AGENTS.md` — contexto completo para agentes de IA (sistema, stack, convenciones, reglas de negocio).
+- `docs/roadmap.md` — backlog de casos de uso y su estado.
+- `openspec/` — especificaciones y changes planificados con OpenSpec.
 
 ## Comandos útiles
 
@@ -178,9 +230,3 @@ openspec new change <nombre-en-kebab-case>
 
 - Backend: `GET /api/health` responde `200 OK` con `{"estado":"ok"}`.
 - Frontend: abrir `http://localhost:5173`.
-
-## Documentación
-
-- `AGENTS.md`: contexto completo para agentes de IA (sistema, stack, convenciones, reglas de negocio).
-- `docs/roadmap.md`: backlog de casos de uso y su estado.
-- `openspec/`: especificaciones y changes planificados con OpenSpec.

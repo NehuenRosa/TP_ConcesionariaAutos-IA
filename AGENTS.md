@@ -32,7 +32,7 @@ vehículos disponibles.
 | CU-07 | Turno de test drive | El cliente solicita turno eligiendo fecha y franja horaria; el sistema valida disponibilidad y evita superposición. |
 | CU-08 | Reserva de vehículo | El cliente reserva una unidad (disponible → reservado); el vendedor confirma la venta o cancela y libera la unidad. |
 | CU-09 | Panel de administración | Dashboard con vehículos por estado, consultas por período, reservas activas y test drives agendados, con gráficos simples. |
-| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Ollama) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
+| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Gemini en la nube, con Ollama local de respaldo) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
 
 El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 
@@ -43,7 +43,7 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 | Backend | Go + Gin (HTTP) + GORM (ORM) + JWT. API REST. |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS. |
 | Base de datos | PostgreSQL. |
-| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema y a Ollama (modelos `MODELO_CHATBOT` y `MODELO_VISION`). La tasación usa valores reales de la Guía Oficial de Precios de la CCA vía API de ArgAutos (`ARGAUTOS_URL`); nunca inventa montos. |
+| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema y a un LLM provisto por **Google AI Gemini en la nube** (`PROVEEDOR_LLM=googleai`, modelos `MODELO_CHATBOT` y `MODELO_VISION`) u **Ollama local** como respaldo (modelos `MODELO_CHATBOT`/`MODELO_VISION`). La tasación usa valores reales de la Guía Oficial de Precios de la CCA vía API de ArgAutos (`ARGAUTOS_URL`); nunca inventa montos. |
 | Infra | Docker + Docker Compose para desarrollo local. Git. |
 
 **Regla:** no agregar dependencias fuera de este stack sin autorización.
@@ -151,6 +151,12 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 - **Endpoints públicos**: `POST /api/chatbot/mensajes` (chat con historial) y
   `POST /api/chatbot/tasacion` (multipart con hasta 5 fotos JPG/PNG/WebP de máx.
   5 MB + `descripcion` opcional). No requieren autenticación.
+- **Proveedores**: por defecto **Google AI Gemini en la nube** (`googleai`,
+  clave `GOOGLE_API_KEY`, modelo `gemini-flash-lite-latest`: contexto 1M de
+  tokens, texto + visión, free tier sin tarjeta). Si no hay clave o se setea
+  `PROVEEDOR_LLM=ollama`, usa **Ollama local** (modelos `MODELO_CHATBOT`/
+  `MODELO_VISION`). `NuevoChatbotService` en `chatbot.go` despacha según el
+  proveedor; `PROVEEDOR_LLM` vacío auto-elige googleai si hay `GOOGLE_API_KEY`.
 - **Tasación con valores reales**: el modelo de visión solo *identifica* el
   vehículo (JSON `{marca, modelo, anio, estado, kilometraje}`); el monto lo
   compone el código (`precios.go`) con el valor oficial de la **Guía de la CCA**
@@ -159,9 +165,9 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   respuesta es honesta (orienta a la concesionaria) — no inventa valores.
 - **Regla de oro**: no cambiar el flujo de la tasación por un prompt que pida al
   LLM "estimar" precios; siempre componer en código con la referencia oficial.
-- **Fallback**: si Ollama está caído, chat y tasación devuelven `200` con un
-  mensaje en español que orienta al usuario (el error interno se loguea con
-  `slog`).
+- **Fallback**: si el proveedor LLM está caído (Gemini u Ollama), chat y
+  tasación devuelven `200` con un mensaje en español que orienta al usuario (el
+  error interno se loguea con `slog`).
 
 ## Flujo de trabajo con OpenSpec
 
@@ -239,8 +245,20 @@ docker compose down
 Ver `.env.example`. Para levantar local, copiar a `.env` y ajustar.
 El backend requiere: conexión a PostgreSQL (`BD_*`), puerto (`PUERTO_API`) y
 secreto JWT (`JWT_SECRETO`). El frontend usa `VITE_API_URL` para apuntar a la API.
-Para el chatbot: `OLLAMA_URL`, `MODELO_CHATBOT`, `MODELO_VISION` (modelos a
-descargar con `ollama pull`) y `ARGAUTOS_URL` (fuente de precios de la CCA).
+Para el chatbot: `PROVEEDOR_LLM`, `GOOGLE_API_KEY` (Gemini en la nube, gratis en
+Google AI Studio), `OLLAMA_URL` (respaldo local), `MODELO_CHATBOT`,
+`MODELO_VISION` (modelos a descargar con `ollama pull` si usás local) y
+`ARGAUTOS_URL` (fuente de precios de la CCA).
+
+`docker compose` aplica fail-fast: **falla si `BD_PASSWORD` o `JWT_SECRETO` no
+están definidas** en `.env` (no hay defaults inseguros). Los puertos publicados
+quedan en loopback (127.0.0.1) y los contenedores corren no-root con
+`cap_drop: [ALL]` y `read_only` donde la imagen lo permite (ver
+`docker-compose.yml`). El backend usa el **Ollama nativo del host**
+(`OLLAMA_URL=http://host.docker.internal:11434`) por defecto: no duplica
+modelos ni procesos. Si se prefiere Ollama en contenedor (con `gpus: all`,
+requiere NVIDIA Container Toolkit; sin toolkit quitar ese bloque para CPU),
+levantarlo con `docker compose --profile ollama-contenedor up -d`.
 
 El MCP de GitHub (configurado en `.opencode/opencode.json`) autentica con un
 PAT vía `{env:GITHUB_TOKEN}`. Como opencode resuelve las variables de entorno

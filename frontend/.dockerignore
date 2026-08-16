@@ -1,0 +1,7 @@
+# Reducir el contexto de build y evitar filtrar archivos locales
+node_modules
+dist
+.git
+.gitignore
+*.log
+Dockerfile

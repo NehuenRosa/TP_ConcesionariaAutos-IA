@@ -17,9 +17,11 @@ context: |
   - Frontend: React + Vite + TypeScript + React Router + TailwindCSS.
   - Base de datos: PostgreSQL.
   - Chatbot: LangChain (langchaingo en el backend Go), conectado a la API,
-    con Ollama (modelo de chat y modelo de visión). La tasación usa valores
-    reales de la Guía Oficial de Precios de la CCA, consultada a través de la
-    API pública de ArgAutos (ARGAUTOS_URL); nunca inventa precios.
+    con Google AI Gemini en la nube (googleai, por defecto si hay GOOGLE_API_KEY)
+    u Ollama local como respaldo (modelos MODELO_CHATBOT/MODELO_VISION). La
+    tasación usa valores reales de la Guía Oficial de Precios de la CCA,
+    consultada a través de la API pública de ArgAutos (ARGAUTOS_URL); el LLM
+    solo identifica el vehículo y nunca inventa precios.
   - Infra: Docker + Docker Compose.
 
   Arquitectura backend por capas: handler (HTTP) → service (negocio) →

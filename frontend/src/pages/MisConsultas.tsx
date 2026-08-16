@@ -43,7 +43,8 @@ export function MisConsultas() {
     }
   }, [cargarConsultas])
 
-  const seleccionada = id ? consultas.find((c) => c.id === Number(id)) : null
+  const seleccionada = id ? consultas.find((c) => c.id === Number(id)) ?? null : null
+  const idInvalido = id !== undefined && seleccionada === null && !cargando
 
   if (cargando) {
     return <ContenidoCargando etiqueta="Cargando consultas…" />
@@ -126,6 +127,27 @@ export function MisConsultas() {
             estado={seleccionada.estado}
             onMensajeEnviado={cargarConsultas}
           />
+        ) : idInvalido ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-red-500/30 bg-red-500/10 text-red-300">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-7 w-7">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                />
+              </svg>
+            </div>
+            <div>
+              <p className="font-display text-base font-semibold text-plata-100">Consulta no encontrada</p>
+              <p className="mt-1 max-w-xs text-sm text-plata-400">
+                La consulta no existe o no te pertenece.
+              </p>
+            </div>
+            <Boton variante="secundario" tamano="sm" onClick={() => navigate('/mis-consultas')}>
+              Volver a mis consultas
+            </Boton>
+          </div>
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-carbono-800 text-plata-400">

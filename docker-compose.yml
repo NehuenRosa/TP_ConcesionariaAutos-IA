@@ -1,54 +1,146 @@
+# Docker Compose de la concesionaria.
+#
+# Buenas prácticas aplicadas (guía de seguridad Docker 2026):
+#   - Sin clave `version:` (obsoleta en el spec actual de Compose).
+#   - Imágenes con versión fija (sin :latest) para builds reproducibles.
+#   - Secretos obligatorios (BD_PASSWORD, JWT_SECRETO): fallan rápido si faltan
+#     (fail-fast con `${VAR:?...}`) en lugar de defaults inseguros.
+#   - Redes segmentadas: `red-publica` (frontend + backend) y `red-interna`
+#     (backend + postgres + ollama). Postgres y ollama no quedan en la red pública.
+#   - Puertos publicados solo en loopback (127.0.0.1): no se exponen a la red.
+#   - Contenedores no-root (`user:`), capabilities mínimas (`cap_drop: [ALL]`
+#     + `cap_add` mínimo) y `security_opt: no-new-privileges`.
+#   - Filesystem de solo lectura (`read_only: true`) con `tmpfs` para lo
+#     escribible, donde la imagen lo permite.
+#   - `init: true` (tini) para manejo correcto de señales y zombies.
+#   - Healthchecks en todos los servicios, rotación de logs y límites de memoria.
+#
+# Para generar los secretos en PowerShell:
+#   $env:BD_PASSWORD = -join ((1..24) | ForEach-Object { (48..122 | Get-Random -Count 1) } | ForEach-Object { [char]$_ })
+#   $env:JWT_SECRETO  = -join ((1..32) | ForEach-Object { (48..122 | Get-Random -Count 1) } | ForEach-Object { [char]$_ })
+
+name: concesionaria
+
 services:
   postgres:
     image: postgres:17-alpine
     container_name: concesionaria-postgres
     restart: unless-stopped
+    user: "70:70"
     environment:
       POSTGRES_USER: ${BD_USUARIO:-concesionaria}
-      POSTGRES_PASSWORD: ${BD_PASSWORD:-concesionaria}
+      POSTGRES_PASSWORD: ${BD_PASSWORD:?Definí BD_PASSWORD en .env}
       POSTGRES_DB: ${BD_NOMBRE:-concesionaria}
+    # Solo accesible desde el host (loopback) para tareas de mantenimiento.
+    # Eliminá esta línea si no necesitás psql desde el host: el backend se
+    # conecta por la red interna.
     ports:
-      - "${BD_PUERTO:-5432}:5432"
+      - "127.0.0.1:${BD_PUERTO:-5432}:5432"
     volumes:
       - datos-postgres:/var/lib/postgresql/data
+    networks:
+      - red-interna
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${BD_USUARIO:-concesionaria} -d ${BD_NOMBRE:-concesionaria}"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 5s
 
   backend:
     build:
       context: ./backend
     container_name: concesionaria-backend
     restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    stop_grace_period: 10s
     environment:
       HOST_API: 0.0.0.0
       PUERTO_API: ${PUERTO_API:-8080}
       BD_HOST: postgres
       BD_PUERTO: 5432
       BD_USUARIO: ${BD_USUARIO:-concesionaria}
-      BD_PASSWORD: ${BD_PASSWORD:-concesionaria}
+      BD_PASSWORD: ${BD_PASSWORD:?Definí BD_PASSWORD en .env}
       BD_NOMBRE: ${BD_NOMBRE:-concesionaria}
       BD_SSL: disable
-      JWT_SECRETO: ${JWT_SECRETO:-cambiar-en-produccion}
+      JWT_SECRETO: ${JWT_SECRETO:?Definí JWT_SECRETO en .env}
       CORS_ORIGENES: ${CORS_ORIGENES:-*}
-      OLLAMA_URL: http://ollama:11434
-      MODELO_CHATBOT: ${MODELO_CHATBOT:-llama3}
-      # minicpm-v (~3.2 GB) entra junto a llama3 en 8 GB de VRAM; llama3.2-vision (~7.9 GB) no
-      MODELO_VISION: ${MODELO_VISION:-minicpm-v}
+      # LLM: por defecto Gemini en la nube (googleai) si hay GOOGLE_API_KEY.
+      # Sin clave cae a Ollama local (host.docker.internal).
+      PROVEEDOR_LLM: ${PROVEEDOR_LLM:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OLLAMA_URL: http://host.docker.internal:11434
+      # Modelos vacíos = el backend elige el default según el proveedor:
+      # googleai -> gemini-flash-lite-latest (texto + visión); ollama -> llama3 /
+      # minicpm-v.
+      MODELO_CHATBOT: ${MODELO_CHATBOT:-}
+      MODELO_VISION: ${MODELO_VISION:-}
+      ARGAUTOS_URL: ${ARGAUTOS_URL:-https://argautos.com/api/v1}
     ports:
-      - "${PUERTO_API:-8080}:8080"
+      - "127.0.0.1:${PUERTO_API:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - red-publica
+      - red-interna
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   ollama:
-    image: ollama/ollama:latest
+    # Opcional: por defecto el backend usa el Ollama nativo del host
+    # (OLLAMA_URL=http://host.docker.internal:11434). Para levantar Ollama en
+    # contenedor (con GPU) en vez del nativo:
+    #   docker compose --profile ollama-contenedor up -d
+    profiles: ["ollama-contenedor"]
+    image: ollama/ollama:0.32.13
     container_name: concesionaria-ollama
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
     ports:
-      - "11434:11434"
+      # Loopback para probar la API desde el host (ej. curl). El backend la
+      # alcanza por la red interna; eliminá esta línea si no la necesitás.
+      - "127.0.0.1:11434:11434"
     environment:
       OLLAMA_HOST: 0.0.0.0
       # Ajustes para 8 GB de VRAM: un solo modelo cargado, un request a la vez
@@ -58,15 +150,29 @@ services:
       OLLAMA_CONTEXT_LENGTH: "4096"
     volumes:
       - datos-ollama:/root/.ollama
-    # Habilita la aceleración por GPU (requiere NVIDIA Container Toolkit).
-    # Sin GPU, los modelos se ejecutan por CPU pero mucho más lento.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    networks:
+      - red-interna
+    # GPU: requiere NVIDIA Container Toolkit. En máquinas sin GPU, quitar este
+    # bloque para que Ollama corra por CPU.
+    gpus: all
+    cap_drop:
+      - ALL
+    cap_add:
+      # Necesaria para fijar la memoria del modelo en RAM (CUDA/GPU).
+      - IPC_LOCK
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   frontend:
     build:
@@ -75,11 +181,46 @@ services:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/api}
     container_name: concesionaria-frontend
     restart: unless-stopped
+    init: true
+    user: "101:101"
+    stop_grace_period: 10s
     ports:
-      - "${PUERTO_FRONTEND:-5173}:80"
+      - "127.0.0.1:${PUERTO_FRONTEND:-5173}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    networks:
+      - red-publica
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    cap_add:
+      # Necesaria para escuchar en el puerto 80 (< 1024).
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
 volumes:
   datos-postgres:
   datos-ollama:
+
+networks:
+  red-publica:
+  red-interna:

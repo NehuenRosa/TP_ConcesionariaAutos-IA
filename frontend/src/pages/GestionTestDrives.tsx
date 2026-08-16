@@ -11,6 +11,7 @@ import {
   etiquetasEstadoTestDrive,
   EtiquetaEstado,
 } from '../components/ui/EtiquetaEstado'
+import { formatearFranja } from '../utils/formato'
 
 const ESTADOS: Array<{ valor: EstadoTurnoTestDrive | ''; etiqueta: string }> = [
   { valor: '', etiqueta: 'Todos' },
@@ -36,22 +37,28 @@ export function GestionTestDrives() {
   const [error, setError] = useState<string | null>(null)
   const [accionId, setAccionId] = useState<number | null>(null)
 
-  const cargarTurnos = useCallback(async () => {
-    try {
-      const datos = await api.listarTestDrives(filtro || undefined)
-      setTurnos(datos)
-      setError(null)
-    } catch (e: unknown) {
-      setError(e instanceof ErrorApi ? e.message : 'Error al cargar los test drives')
-    } finally {
-      setCargando(false)
-    }
-  }, [filtro])
+  const cargarTurnos = useCallback(
+    async (filtroSolicitado: EstadoTurnoTestDrive | '' = filtro) => {
+      try {
+        const datos = await api.listarTestDrives(filtroSolicitado || undefined)
+        // Ignorar respuestas obsoletas si el filtro cambió mientras volvía.
+        if (filtroSolicitado !== filtro) return
+        setTurnos(datos)
+        setError(null)
+      } catch (e: unknown) {
+        if (filtroSolicitado !== filtro) return
+        setError(e instanceof ErrorApi ? e.message : 'Error al cargar los test drives')
+      } finally {
+        if (filtroSolicitado === filtro) setCargando(false)
+      }
+    },
+    [filtro],
+  )
 
   useEffect(() => {
     setCargando(true)
-    cargarTurnos()
-  }, [cargarTurnos])
+    void cargarTurnos(filtro)
+  }, [cargarTurnos, filtro])
 
   const ejecutarAccion = async (turno: TurnoTestDrive, accion: 'confirmar' | 'cancelar' | 'completar') => {
     if (accion === 'cancelar' && !window.confirm(`¿Cancelar el turno de ${turno.cliente.nombre}?`)) {
@@ -137,7 +144,7 @@ export function GestionTestDrives() {
                 </p>
                 <p className="text-sm text-plata-400">
                   {formatearFecha(turno.fecha)} ·{' '}
-                  <span className="text-plata-300 capitalize">{turno.franja}</span>
+                  <span className="text-plata-300">{formatearFranja(turno.franja)}</span>
                 </p>
               </div>
 

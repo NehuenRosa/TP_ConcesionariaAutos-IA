@@ -48,6 +48,16 @@ export function etiquetaCondicion(condicion: string): string {
   return condicion === 'nuevo' ? 'Nuevo' : 'Usado'
 }
 
+// formatearFranja muestra una franja de test drive legible: los turnos nuevos
+// usan la hora de inicio ("10:00"), las franjas viejas de "manana"/"tarde" se
+// conservan para no romper registros históricos.
+export function formatearFranja(franja: string): string {
+  if (/^\d{2}:\d{2}$/.test(franja)) return `${franja} hs`
+  if (franja === 'manana') return 'Mañana'
+  if (franja === 'tarde') return 'Tarde'
+  return franja
+}
+
 export function imagenVehiculo(imagen: string | undefined | null): string {
   if (imagen) return imagen
   return 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80'

@@ -18,6 +18,8 @@ var (
 	ErrTurnoNoEncontrado = errors.New("turno de test drive no encontrado")
 	// ErrDatosTurnoInvalidos indica que la fecha o la franja horaria no son válidas.
 	ErrDatosTurnoInvalidos = errors.New("fecha o franja horaria inválida")
+	// ErrTurnoEnPasado indica que la franja elegida para hoy ya comenzó.
+	ErrTurnoEnPasado = errors.New("esa hora ya pasó para hoy, elegí otro horario")
 	// ErrTurnoSuperpuesto indica que ya hay un turno activo para la misma
 	// unidad en la misma fecha y franja.
 	ErrTurnoSuperpuesto = errors.New("el turno ya está ocupado para esa unidad, fecha y franja")
@@ -73,6 +75,9 @@ func (s *turnoTestDriveService) Solicitar(ctx context.Context, clienteID uint, v
 	if !esFechaValida(fecha) {
 		return nil, ErrDatosTurnoInvalidos
 	}
+	if !esHoraDisponible(fecha, franja) {
+		return nil, ErrTurnoEnPasado
+	}
 
 	vehiculo, err := s.vehiculos.ObtenerPorID(ctx, vehiculoID)
 	if err != nil {
@@ -85,14 +90,6 @@ func (s *turnoTestDriveService) Solicitar(ctx context.Context, clienteID uint, v
 		return nil, ErrVehiculoNoDisponible
 	}
 
-	superpuesto, err := s.repositorio.ExisteSuperposicion(ctx, vehiculoID, fecha, franja)
-	if err != nil {
-		return nil, err
-	}
-	if superpuesto {
-		return nil, ErrTurnoSuperpuesto
-	}
-
 	turno := &models.TurnoTestDrive{
 		VehiculoID: vehiculoID,
 		ClienteID:  clienteID,
@@ -100,7 +97,15 @@ func (s *turnoTestDriveService) Solicitar(ctx context.Context, clienteID uint, v
 		Franja:     franja,
 		Estado:     models.EstadoTurnoSolicitado,
 	}
-	return s.repositorio.Crear(ctx, turno)
+	creado, creadoOK, err := s.repositorio.CrearSiSinSuperposicion(ctx, turno)
+	if err != nil {
+		return nil, err
+	}
+	// El repositorio devuelve true solo si creó el turno sin superposición.
+	if !creadoOK {
+		return nil, ErrTurnoSuperpuesto
+	}
+	return creado, nil
 }
 
 // ListarMisTurnos lista los turnos de un cliente.
@@ -193,14 +198,43 @@ func (s *turnoTestDriveService) Franjas() []models.FranjaHoraria {
 	return models.FranjasDisponibles()
 }
 
-// esFechaValida valida el formato YYYY-MM-DD y que la fecha no sea anterior a hoy.
+// esFechaValida valida el formato YYYY-MM-DD y que la fecha no sea anterior a
+// hoy. Compara por componentes en la zona local: Truncate sobre la hora actual
+// recorta al mediodía UTC y descalificaba la fecha de hoy en zonas al oeste.
 func esFechaValida(fecha string) bool {
 	parseada, err := time.Parse("2006-01-02", fecha)
 	if err != nil {
 		return false
 	}
-	hoy := time.Now().Truncate(24 * time.Hour)
-	return !parseada.Before(hoy)
+	ahora := time.Now()
+	hoy := time.Date(ahora.Year(), ahora.Month(), ahora.Day(), 0, 0, 0, 0, ahora.Location())
+	pedida := time.Date(parseada.Year(), parseada.Month(), parseada.Day(), 0, 0, 0, 0, ahora.Location())
+	return !pedida.Before(hoy)
+}
+
+// esHoraDisponible indica si la franja elegida todavía no comenzó cuando la
+// fecha pedida es hoy. Para cualquier otra fecha siempre está disponible.
+func esHoraDisponible(fecha string, franja string) bool {
+	return esHoraDisponibleEn(fecha, franja, time.Now())
+}
+
+// esHoraDisponibleEn compara la franja contra un instante dado (inyectado para
+// poder testear). Solo bloquea franjas del día actual que ya hayan comenzado.
+func esHoraDisponibleEn(fecha string, franja string, ahora time.Time) bool {
+	if fecha != ahora.Format("2006-01-02") {
+		return true
+	}
+	for _, disponible := range models.FranjasDisponibles() {
+		if disponible.ID == franja {
+			inicio, err := time.Parse("15:04", disponible.Inicio)
+			if err != nil {
+				return false
+			}
+			comienzo := time.Date(ahora.Year(), ahora.Month(), ahora.Day(), inicio.Hour(), inicio.Minute(), 0, 0, ahora.Location())
+			return comienzo.After(ahora)
+		}
+	}
+	return false
 }
 
 // esEstadoTurnoValido indica si el estado es uno de los conocidos.

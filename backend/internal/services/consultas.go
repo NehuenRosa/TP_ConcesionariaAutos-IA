@@ -137,24 +137,23 @@ func (s *consultaService) ListarPorUsuario(ctx context.Context, usuarioID uint) 
 	return s.repositorio.ListarPorUsuario(ctx, usuarioID)
 }
 
-// Tomar asigna un vendedor a una consulta pendiente.
+// Tomar asigna un vendedor a una consulta pendiente. Usa un UPDATE atómico
+// para que dos vendedores no puedan tomar la misma consulta a la vez.
 func (s *consultaService) Tomar(ctx context.Context, consultaID uint, vendedorID uint) (*models.Consulta, error) {
-	consulta, err := s.repositorio.ObtenerPorID(ctx, consultaID)
+	tomada, err := s.repositorio.TomarSiPendiente(ctx, consultaID, vendedorID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrConsultaNoEncontrada
-		}
-		return nil, fmt.Errorf("obtener consulta: %w", err)
+		return nil, err
 	}
 
-	if consulta.Estado != models.EstadoPendiente {
+	if !tomada {
+		// Distinguir "no existe" de "ya no está pendiente".
+		if _, err := s.ObtenerPorID(ctx, consultaID); err != nil {
+			return nil, err
+		}
 		return nil, ErrConsultaNoPendiente
 	}
 
-	consulta.VendedorID = &vendedorID
-	consulta.Estado = models.EstadoEnConversacion
-
-	return s.repositorio.Actualizar(ctx, consulta)
+	return s.repositorio.ObtenerPorID(ctx, consultaID)
 }
 
 // Cerrar cambia el estado de una consulta a cerrada.

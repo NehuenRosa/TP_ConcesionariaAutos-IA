@@ -64,6 +64,8 @@ func (h *TurnoTestDriveHandler) Solicitar(c *gin.Context) {
 		switch {
 		case errors.Is(err, services.ErrDatosTurnoInvalidos):
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrTurnoEnPasado):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrVehiculoNoDisponible):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrTurnoSuperpuesto):

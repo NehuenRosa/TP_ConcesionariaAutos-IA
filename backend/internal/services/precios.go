@@ -111,14 +111,24 @@ func (s *servicioPrecios) consultar(ctx context.Context, marca string, modelo st
 	}
 
 	return ReferenciaPrecio{
-		Marca:     strings.ToUpper(marca[:1]) + marca[1:],
-		Modelo:    strings.ToUpper(modelo[:1]) + modelo[1:],
+		Marca:     inicialMayuscula(marca),
+		Modelo:    inicialMayuscula(modelo),
 		Version:   version,
 		Anio:      anioReferencia,
 		PrecioUSD: precioUSD,
 		PrecioARS: precioARS,
 		Fuente:    fuentePrecios,
 	}, nil
+}
+
+// inicialMayuscula pone en mayúscula la primera letra de un texto respetando
+// caracteres multibyte (ej. "Škoda" → "Škoda", no "koda").
+func inicialMayuscula(texto string) string {
+	runas := []rune(strings.TrimSpace(texto))
+	if len(runas) == 0 {
+		return ""
+	}
+	return strings.ToUpper(string(runas[0])) + string(runas[1:])
 }
 
 // buscarVersion llama a /search, elige la versión cuyo año referencia se acerca

@@ -45,13 +45,14 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
   const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MILISEGUNDOS)
   try {
     const token = obtenerToken()
+    const { headers: encabezadosOpcionales, ...restoOpciones } = opciones ?? {}
     const respuesta = await fetch(`${urlBase}${ruta}`, {
+      ...restoOpciones,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...opciones?.headers,
+        ...encabezadosOpcionales,
       },
-      ...opciones,
       signal: controlador.signal,
     })
 
@@ -66,6 +67,12 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
         // Se ignora: se mantiene el mensaje por defecto.
       }
       throw new ErrorApi(mensaje, respuesta.status)
+    }
+
+    // El backend responde 204 No Content en eliminaciones; un cuerpo vacío
+    // rompería respuesta.json(), así que se corta antes.
+    if (respuesta.status === 204) {
+      return undefined as T
     }
 
     return (await respuesta.json()) as T
@@ -107,6 +114,10 @@ async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: st
         // Se ignora: se mantiene el mensaje por defecto.
       }
       throw new ErrorApi(mensaje, respuesta.status)
+    }
+
+    if (respuesta.status === 204) {
+      return undefined as T
     }
 
     return (await respuesta.json()) as T

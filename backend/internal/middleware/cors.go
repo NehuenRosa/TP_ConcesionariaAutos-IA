@@ -15,11 +15,13 @@ func CORS(origenesPermitidos string) gin.HandlerFunc {
 
 		if permitido {
 			if origenesPermitidos == "*" {
+				// Con origen comodín no se puede enviar Allow-Credentials
+				// (la spec lo prohíbe); la app usa tokens Bearer, no cookies.
 				c.Header("Access-Control-Allow-Origin", "*")
 			} else {
 				c.Header("Access-Control-Allow-Origin", origen)
+				c.Header("Access-Control-Allow-Credentials", "true")
 			}
-			c.Header("Access-Control-Allow-Credentials", "true")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		}

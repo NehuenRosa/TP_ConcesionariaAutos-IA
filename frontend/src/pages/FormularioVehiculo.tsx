@@ -57,12 +57,14 @@ export function FormularioVehiculo() {
   const [cargando, setCargando] = useState(esEdicion)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorCarga, setErrorCarga] = useState<string | null>(null)
 
   useEffect(() => {
     if (!id) return
     let cancelado = false
     setCargando(true)
     setError(null)
+    setErrorCarga(null)
 
     api
       .obtenerVehiculoGestion(Number(id))
@@ -84,7 +86,7 @@ export function FormularioVehiculo() {
       })
       .catch((e: unknown) => {
         if (cancelado) return
-        setError(e instanceof ErrorApi ? e.message : 'No se pudo cargar el vehículo.')
+        setErrorCarga(e instanceof ErrorApi ? e.message : 'No se pudo cargar el vehículo.')
       })
       .finally(() => {
         if (!cancelado) setCargando(false)
@@ -136,6 +138,21 @@ export function FormularioVehiculo() {
 
   if (cargando) {
     return <ContenidoCargando etiqueta="Cargando vehículo…" />
+  }
+
+  if (esEdicion && errorCarga) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-24 text-center sm:px-6">
+        <p className="mb-2 font-display text-xs font-semibold tracking-[0.3em] text-acento-400 uppercase">Error</p>
+        <h1 className="font-display text-3xl font-bold text-plata-100">No se pudo cargar el vehículo</h1>
+        <p className="mt-3 text-plata-400">{errorCarga}</p>
+        <div className="mt-8">
+          <Boton variante="secundario">
+            <Link to="/admin/vehiculos">Volver a la gestión</Link>
+          </Boton>
+        </div>
+      </div>
+    )
   }
 
   return (

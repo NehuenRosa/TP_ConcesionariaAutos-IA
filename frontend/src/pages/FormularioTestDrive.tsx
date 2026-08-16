@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { Vehiculo } from '../types/vehiculo'
@@ -9,7 +9,19 @@ import { ContenidoCargando } from '../components/ui/Spinner'
 import { formatearPrecio } from '../utils/formato'
 
 function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  const ahora = new Date()
+  const mes = String(ahora.getMonth() + 1).padStart(2, '0')
+  const dia = String(ahora.getDate()).padStart(2, '0')
+  return `${ahora.getFullYear()}-${mes}-${dia}`
+}
+
+// franjaEnPasado indica si la franja ya comenzó cuando se pide para hoy.
+function franjaEnPasado(fecha: string, franja: FranjaHoraria): boolean {
+  if (fecha !== hoyISO()) return false
+  const [hora, minuto] = franja.inicio.split(':').map(Number)
+  const comienzo = new Date()
+  comienzo.setHours(hora, minuto, 0, 0)
+  return comienzo.getTime() <= Date.now()
 }
 
 export function FormularioTestDrive() {
@@ -23,6 +35,7 @@ export function FormularioTestDrive() {
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [turnoCreado, setTurnoCreado] = useState(false)
+  const enviandoRef = useRef(false)
 
   useEffect(() => {
     if (!id) return
@@ -33,9 +46,6 @@ export function FormularioTestDrive() {
         if (cancelado) return
         setVehiculo(dato)
         setFranjas(franjasDisponibles)
-        if (franjasDisponibles.length > 0) {
-          setFranja(franjasDisponibles[0].id)
-        }
       })
       .catch((e: unknown) => {
         if (cancelado) return
@@ -51,8 +61,8 @@ export function FormularioTestDrive() {
   }, [id])
 
   const handleSolicitar = async () => {
-    if (!vehiculo || !fecha || !franja) return
-
+    if (!vehiculo || !fecha || !franja || enviandoRef.current) return
+    enviandoRef.current = true
     setEnviando(true)
     setErrorEnvio(null)
 
@@ -66,6 +76,7 @@ export function FormularioTestDrive() {
     } catch (e: unknown) {
       setErrorEnvio(e instanceof ErrorApi ? e.message : 'No se pudo solicitar el test drive')
     } finally {
+      enviandoRef.current = false
       setEnviando(false)
     }
   }
@@ -104,8 +115,7 @@ export function FormularioTestDrive() {
             <span className="font-semibold text-plata-100">
               {vehiculo.marca} {vehiculo.modelo}
             </span>{' '}
-            para el {fecha} en la franja de{' '}
-            <span className="capitalize">{franja === 'manana' ? 'la mañana' : 'la tarde'}</span>. Un
+            para el {fecha} a las <span className="font-semibold text-plata-100">{franja} hs</span>. Un
             vendedor te confirmará el turno.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -164,36 +174,52 @@ export function FormularioTestDrive() {
           />
 
           <div>
-            <span className="etiqueta">Franja horaria</span>
-            <div className="mt-2 space-y-2">
-              {franjas.map((f) => (
-                <label
-                  key={f.id}
-                  className={`flex cursor-pointer items-center justify-between rounded-xl border p-3.5 transition ${
-                    franja === f.id
-                      ? 'border-acento-400/60 bg-acento-400/10 shadow-resaltado'
-                      : 'border-white/8 bg-carbono-900/50 hover:border-white/20'
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <span
-                      className={`flex h-4 w-4 items-center justify-center rounded-full border ${
-                        franja === f.id ? 'border-acento-400' : 'border-plata-500'
-                      }`}
-                    >
-                      {franja === f.id && <span className="h-2 w-2 rounded-full bg-acento-400" />}
+            <span className="etiqueta">Hora del turno</span>
+            <p className="mt-1 text-xs text-plata-500">
+              Elegí la hora exacta a la que querés la prueba de manejo.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {franjas.map((f) => {
+                const enPasado = franjaEnPasado(fecha, f)
+                const seleccionada = franja === f.id
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => {
+                      setFranja(f.id)
+                      setErrorEnvio(null)
+                    }}
+                    disabled={enPasado || enviando}
+                    aria-pressed={seleccionada}
+                    className={`rounded-xl border px-3 py-3 text-center transition ${
+                      enPasado
+                        ? 'cursor-not-allowed border-white/5 bg-carbono-900/30 text-plata-600 opacity-50'
+                        : seleccionada
+                          ? 'border-acento-400/60 bg-acento-400/10 text-acento-300 shadow-resaltado'
+                          : 'border-white/8 bg-carbono-900/50 text-plata-100 hover:border-white/20'
+                    }`}
+                  >
+                    <span className="texto-numerico block font-display text-sm font-semibold">
+                      {f.inicio}
                     </span>
-                    <span className="font-display text-sm font-medium text-plata-100 capitalize">{f.id}</span>
-                  </span>
-                  <span className="texto-numerico text-sm text-plata-400">
-                    {f.inicio} – {f.fin}
-                  </span>
-                </label>
-              ))}
+                    <span className="mt-0.5 block text-[11px] text-plata-500">
+                      {f.inicio} – {f.fin} hs
+                    </span>
+                  </button>
+                )
+              })}
             </div>
+            {franjas.length === 0 && (
+              <p className="mt-2 text-sm text-plata-500">No hay horarios disponibles por el momento.</p>
+            )}
           </div>
 
-          {errorEnvio && <p className="text-sm text-red-400">{errorEnvio}</p>}
+          {errorEnvio && (
+            <p role="alert" className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+              {errorEnvio}
+            </p>
+          )}
 
           <Boton
             tamano="lg"
@@ -203,6 +229,11 @@ export function FormularioTestDrive() {
           >
             {enviando ? 'Solicitando…' : 'Solicitar test drive'}
           </Boton>
+          {!franja && (
+            <p className="text-center text-xs text-plata-500">
+              Seleccioná una hora para habilitar la solicitud.
+            </p>
+          )}
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-# Despliegue en la nube (Render + RunPod)
+# Despliegue en la nube (Render)
 
 Este documento explica cómo correr el sistema completo en la nube para no
 consumir recursos de la PC local. El stack en nube queda así:
@@ -8,37 +8,30 @@ consumir recursos de la PC local. El stack en nube queda así:
 | Frontend (React) | Render (web service con Docker) | Plan free (duerme con inactividad) |
 | Backend (Go + Gin) | Render (web service con Docker) | Plan free (duerme con inactividad) |
 | PostgreSQL | Render (base de datos) | Plan free (expira a los 90 días) |
-| Chatbot / visión (Ollama) | RunPod (pod con GPU) | Por segundo (~US$0,2/h, se apaga cuando no se usa) |
+| Chatbot / visión (Gemini) | Google AI (nube) | Free tier sin tarjeta (~1000 requests/día) |
 
 La configuración ya está en `render.yaml` (blueprint de Render).
 
-## 1. Levantar Ollama en RunPod (GPU)
+## 1. Obtener la API key de Gemini
 
-1. Crear cuenta en https://runpod.io y cargar saldo (US$5 alcanzan de sobra).
-2. **Deploy** → buscar la plantilla **Ollama** → elegir una GPU con ≥ 16 GB de
-   VRAM (p. ej. RTX 3090) → **Deploy On-Demand**.
-3. Cuando el pod esté en **Running**, abrir la terminal web y descargar los
-   modelos:
-   ```
-   ollama pull llama3
-   ollama pull minicpm-v
-   ```
-4. En la pestaña del pod, exponer el puerto **11434** como puerto HTTP. RunPod
-   muestra una URL pública con el formato:
-   ```
-   https://<TU-POD-ID>-11434.proxy.runpod.net
-   ```
-5. Apagar el pod cuando no se use (RunPod factura por segundo).
+1. Crear la clave en https://aistudio.google.com → **Get API key** (requiere una
+   cuenta de Google, sin tarjeta de crédito).
+2. Guardarla en la variable de entorno `GOOGLE_API_KEY` del backend en Render
+   (y en el `.env` local si querés la nube también en dev).
+
+> Sin `GOOGLE_API_KEY`, el backend usa Ollama local como respaldo. En la nube
+> conviene siempre usar Gemini: el free tier de `gemini-flash-lite-latest` (1M de
+> contexto, texto + visión) alcanza para una demo sin costo.
 
 ## 2. Desplegar en Render
 
 1. Crear cuenta en https://render.com y conectarla con el repositorio de GitHub.
 2. **New + → Blueprint** → seleccionar el repo → Render detecta `render.yaml`.
 3. Reemplazar los placeholders en `render.yaml` antes de crear el blueprint:
-   - `TU-POD-11434.proxy.runpod.net` → la URL del pod de RunPod (paso 1.4).
    - `TU-FRONTEND.onrender.com` → la URL que Render asigne al frontend.
    - `TU-BACKEND.onrender.com` → la URL que Render asigne al backend.
-4. **Apply**. Render crea: base Postgres, backend y frontend.
+4. En el panel del backend, agregar la variable `GOOGLE_API_KEY` (paso 1).
+5. **Apply**. Render crea: base Postgres, backend y frontend.
 
 > Las URLs se conocen después del primer deploy. Un truco: dejar el placeholder,
 > desplegar, y luego actualizar `CORS_ORIGENES` y `VITE_API_URL` en el panel de
@@ -67,3 +60,5 @@ La configuración ya está en `render.yaml` (blueprint de Render).
   `docker-compose.yml`. La nube usa `BD_URL` (URL completa) y `PORT` que inyecta
   Render; el backend soporta ambos modos (`backend/internal/config/config.go` y
   `backend/internal/database/database.go`).
+- Chatbot: en ambos entornos `PROVEEDOR_LLM` vacío auto-elige Gemini si hay
+  `GOOGLE_API_KEY`; si no, usa Ollama (en local, el nativo del host).
