@@ -148,9 +148,18 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 
 ### Chatbot asistente (CU-10)
 
-- **Endpoints públicos**: `POST /api/chatbot/mensajes` (chat con historial) y
+- **Endpoints públicos**: `POST /api/chatbot/mensajes` (chat con historial),
   `POST /api/chatbot/tasacion` (multipart con hasta 5 fotos JPG/PNG/WebP de máx.
-  5 MB + `descripcion` opcional). No requieren autenticación.
+  5 MB + `descripcion` opcional + `sesion_id` opcional) y
+  `POST /api/chatbot/tasacion/confirmar` (JSON `{sesion_id, mensaje}` con el día
+  y la franja elegidos). No requieren autenticación.
+- **Confirmación de tasación**: al tasar con referencia, la IA guarda la
+  tasación **pendiente** en la tabla `tasaciones` (vehículo identificado,
+  precios reales y `sesion_id`) y pregunta qué día y franja horaria prefiere el
+  cliente para acercarse. Al confirmar, extrae día/franja con el LLM, valida la
+  franja contra `FranjasDisponibles`, genera un **código único** (verificado con
+  `CodigoExiste`) y pasa la tasación a `confirmada`; la respuesta le indica al
+  cliente que al presentarse diga que quiere terminar de tasar y exhiba el código.
 - **Proveedores**: por defecto **Google AI Gemini en la nube** (`googleai`,
   clave `GOOGLE_API_KEY`, modelo `gemini-flash-lite-latest`: contexto 1M de
   tokens, texto + visión, free tier sin tarjeta). Si no hay clave o se setea

@@ -10,7 +10,19 @@ import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
 import type { CrearReserva, Reserva } from '../types/reserva'
 import type { Metricas } from '../types/metricas'
-import type { PeticionChatbot, RespuestaChatbot } from '../types/chatbot'
+import type {
+  Cotizacion,
+  CotizacionResumen,
+  CrearCotizacion,
+  RespuestaMensajeCotizacion,
+} from '../types/cotizacion'
+import type {
+  ConfirmarTasacion,
+  PeticionChatbot,
+  RespuestaChatbot,
+  RespuestaConfirmarTasacion,
+  RespuestaTasacion,
+} from '../types/chatbot'
 
 const urlBase = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
 const CLAVE_TOKEN = 'token_concesionaria'
@@ -81,9 +93,10 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
   }
 }
 
-// peticionMultipart envía un formulario multipart con fotos y un campo de texto,
-// sin fijar Content-Type para que el navegador agregue el límite del multipart.
-async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: string): Promise<T> {
+// peticionMultipart envía un formulario multipart con fotos, un campo de texto
+// y un identificador de sesión opcional, sin fijar Content-Type para que el
+// navegador agregue el límite del multipart.
+async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: string, sesionId?: string): Promise<T> {
   const controlador = new AbortController()
   const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MILISEGUNDOS)
   try {
@@ -93,6 +106,9 @@ async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: st
       formulario.append('fotos', foto)
     }
     formulario.append('descripcion', descripcion)
+    if (sesionId) {
+      formulario.append('sesion_id', sesionId)
+    }
 
     const respuesta = await fetch(`${urlBase}${ruta}`, {
       method: 'POST',
@@ -246,14 +262,35 @@ export const api = {
   obtenerMetricas: (periodo?: number) =>
     peticion<Metricas>(`/admin/metricas${periodo ? `?periodo=${periodo}` : ''}`),
 
+  // Cotizaciones del cliente (atendidas por la IA)
+  crearCotizacion: (datos: CrearCotizacion) =>
+    peticion<Cotizacion>('/cotizaciones', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  listarMisCotizaciones: () => peticion<CotizacionResumen[]>('/cotizaciones/mis-cotizaciones'),
+  obtenerCotizacion: (id: number) => peticion<Cotizacion>(`/cotizaciones/${id}`),
+  enviarMensajeCotizacion: (id: number, mensaje: string) =>
+    peticion<RespuestaMensajeCotizacion>(`/cotizaciones/${id}/mensajes`, {
+      method: 'POST',
+      body: JSON.stringify({ mensaje }),
+    }),
+  cerrarCotizacion: (id: number) =>
+    peticion<Cotizacion>(`/cotizaciones/${id}/cerrar`, { method: 'PUT' }),
+
   // Chatbot
   enviarMensajeChatbot: (datos: PeticionChatbot) =>
     peticion<RespuestaChatbot>('/chatbot/mensajes', {
       method: 'POST',
       body: JSON.stringify(datos),
     }),
-  enviarTasacion: (fotos: File[], descripcion: string) =>
-    peticionMultipart<RespuestaChatbot>('/chatbot/tasacion', fotos, descripcion),
+  enviarTasacion: (fotos: File[], descripcion: string, sesionId?: string) =>
+    peticionMultipart<RespuestaTasacion>('/chatbot/tasacion', fotos, descripcion, sesionId),
+  confirmarTasacion: (datos: ConfirmarTasacion) =>
+    peticion<RespuestaConfirmarTasacion>('/chatbot/tasacion/confirmar', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
 }
 
 // construirConsultaVehiculos arma la query string del catálogo público con

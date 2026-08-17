@@ -83,6 +83,9 @@ services:
       BD_NOMBRE: ${BD_NOMBRE:-concesionaria}
       BD_SSL: disable
       JWT_SECRETO: ${JWT_SECRETO:?Definí JWT_SECRETO en .env}
+      # Clave para cifrar el contenido de las cotizaciones en reposo. Vacía =
+      # el backend usa JWT_SECRETO como respaldo.
+      CLAVE_ENCRIPTACION: ${CLAVE_ENCRIPTACION:-}
       CORS_ORIGENES: ${CORS_ORIGENES:-*}
       # LLM: por defecto Gemini en la nube (googleai) si hay GOOGLE_API_KEY.
       # Sin clave cae a Ollama local (host.docker.internal).
