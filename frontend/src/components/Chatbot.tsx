@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { TurnoChat } from '../types/chatbot'
 import { Boton } from './ui/Boton'
@@ -14,20 +15,32 @@ const esImagenAceptada = (archivo: File): boolean => {
   return EXTENSIONES_PERMITIDAS.includes(extension)
 }
 
+const generarSesionId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 type FotoConUrl = { archivo: File; url: string }
 
 export function Chatbot() {
+  const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [modo, setModo] = useState<'chat' | 'tasacion'>('chat')
-  const [mensajes, setMensajes] = useState<TurnoChat[]>([])
+  const [mensajesConsulta, setMensajesConsulta] = useState<TurnoChat[]>([])
+  const [mensajesTasacion, setMensajesTasacion] = useState<TurnoChat[]>([])
   const [entrada, setEntrada] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fotos, setFotos] = useState<FotoConUrl[]>([])
   const [descripcion, setDescripcion] = useState('')
+  const [sesionTasacion, setSesionTasacion] = useState<string | null>(null)
+  const [entradaVisita, setEntradaVisita] = useState('')
   const mensajesRef = useRef<HTMLDivElement>(null)
   const entradaRef = useRef<HTMLTextAreaElement>(null)
-  const descripcionRef = useRef<HTMLInputElement>(null)
+  const descripcionRef = useRef<HTMLTextAreaElement>(null)
+  const visitaRef = useRef<HTMLTextAreaElement>(null)
   const urlsCreadasRef = useRef<string[]>([])
   const enviandoRef = useRef(false)
 
@@ -36,6 +49,8 @@ export function Chatbot() {
     urlsCreadasRef.current.push(url)
     return url
   }
+
+  const mensajes = modo === 'tasacion' ? mensajesTasacion : mensajesConsulta
 
   const revocarUrl = (url: string) => {
     const indice = urlsCreadasRef.current.indexOf(url)
@@ -60,13 +75,15 @@ export function Chatbot() {
 
   useEffect(() => {
     if (abierto) {
-      if (modo === 'tasacion') {
+      if (modo === 'tasacion' && sesionTasacion) {
+        visitaRef.current?.focus()
+      } else if (modo === 'tasacion') {
         descripcionRef.current?.focus()
       } else {
         entradaRef.current?.focus()
       }
     }
-  }, [abierto, modo])
+  }, [abierto, modo, sesionTasacion])
 
   const enviarMensaje = async () => {
     const mensaje = entrada.trim()
@@ -76,15 +93,23 @@ export function Chatbot() {
     setCargando(true)
     setError(null)
     setEntrada('')
-    setMensajes((m) => [...m, { rol: 'usuario', contenido: mensaje }])
+    setMensajesConsulta((m) => [...m, { rol: 'usuario', contenido: mensaje }])
 
     try {
-      const historial = mensajes.map((turno) => ({
+      const historial = mensajesConsulta.map((turno) => ({
         rol: turno.rol,
         contenido: turno.contenido,
       }))
       const respuesta = await api.enviarMensajeChatbot({ mensaje, historial })
-      setMensajes((m) => [...m, { rol: 'asistente', contenido: respuesta.respuesta }])
+      setMensajesConsulta((m) => [...m, { rol: 'asistente', contenido: respuesta.respuesta }])
+      // Cuando la IA creó una cotización, se redirige al panel para seguir la
+      // conversación sobre ese vehículo.
+      if (respuesta.cotizacionId) {
+        setTimeout(() => {
+          setAbierto(false)
+          navigate(`/mis-cotizaciones/${respuesta.cotizacionId}`)
+        }, 350)
+      }
     } catch (e: unknown) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo enviar el mensaje')
     } finally {
@@ -94,19 +119,31 @@ export function Chatbot() {
   }
 
   const enviarTasacion = async () => {
-    if (fotos.length === 0 || enviandoRef.current) return
+    const detalle = descripcion.trim()
+    if ((fotos.length === 0 && detalle === '') || enviandoRef.current) return
 
     enviandoRef.current = true
     setCargando(true)
     setError(null)
 
     try {
-      const respuesta = await api.enviarTasacion(fotos.map((foto) => foto.archivo), descripcion)
-      setMensajes((m) => [
+      const respuesta = await api.enviarTasacion(
+        fotos.map((foto) => foto.archivo),
+        descripcion,
+        sesionTasacion ?? generarSesionId(),
+      )
+      const partesUsuario = [`Tasación de mi auto (${fotos.length} foto${fotos.length > 1 ? 's' : ''})`]
+      if (detalle !== '') {
+        partesUsuario.push(detalle)
+      }
+      setMensajesTasacion((m) => [
         ...m,
-        { rol: 'usuario', contenido: `Tasación de mi auto (${fotos.length} foto${fotos.length > 1 ? 's' : ''})` },
+        { rol: 'usuario', contenido: partesUsuario.join('\n') },
         { rol: 'asistente', contenido: respuesta.respuesta },
       ])
+      if (respuesta.sesionId) {
+        setSesionTasacion(respuesta.sesionId)
+      }
       fotos.forEach((foto) => revocarUrl(foto.url))
       setFotos([])
       setDescripcion('')
@@ -116,6 +153,31 @@ export function Chatbot() {
       } else {
         setError(e instanceof ErrorApi ? e.message : 'No se pudo realizar la tasación')
       }
+    } finally {
+      enviandoRef.current = false
+      setCargando(false)
+    }
+  }
+
+  const confirmarVisita = async () => {
+    const mensaje = entradaVisita.trim()
+    if (!mensaje || !sesionTasacion || enviandoRef.current) return
+
+    enviandoRef.current = true
+    setCargando(true)
+    setError(null)
+    setEntradaVisita('')
+    setMensajesTasacion((m) => [...m, { rol: 'usuario', contenido: mensaje }])
+
+    try {
+      const respuesta = await api.confirmarTasacion({ sesionId: sesionTasacion, mensaje })
+      setMensajesTasacion((m) => [...m, { rol: 'asistente', contenido: respuesta.respuesta }])
+      if (respuesta.confirmada) {
+        setSesionTasacion(null)
+      }
+    } catch (e: unknown) {
+      setError(e instanceof ErrorApi ? e.message : 'No se pudo confirmar la visita')
+      setMensajesTasacion((m) => m.slice(0, -1))
     } finally {
       enviandoRef.current = false
       setCargando(false)
@@ -192,7 +254,9 @@ export function Chatbot() {
               </span>
               <div>
                 <p className="font-display text-sm font-semibold text-plata-100">Asistente Aurum</p>
-                <p className="text-xs text-plata-500">Respondo sobre nuestro stock</p>
+                <p className="text-xs text-plata-500">
+                  {modo === 'tasacion' ? 'Tasación de tu auto por fotos' : 'Respondo sobre nuestro stock'}
+                </p>
               </div>
             </div>
             <button
@@ -229,8 +293,9 @@ export function Chatbot() {
           <div ref={mensajesRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {mensajes.length === 0 && (
               <p className="text-sm leading-relaxed text-plata-400">
-                ¡Hola! Preguntame sobre los vehículos disponibles, compará modelos o tasá tu
-                auto actual subiendo sus fotos.
+                {modo === 'tasacion'
+                  ? 'Subí fotos de tu auto y/o contame sus detalles (marca, modelo, año, versión, estado, rayones…). Te doy una tasación con valores reales de la guía oficial: venta normal y otras dos opciones de cobro. Después coordinamos tu visita a la concesionaria.'
+                  : '¡Hola! Preguntame sobre los vehículos disponibles, compará modelos o pedí un test drive.'}
               </p>
             )}
             {mensajes.map((turno, indice) => (
@@ -276,54 +341,88 @@ export function Chatbot() {
           <div className="border-t border-white/8 bg-carbono-850/60 p-3">
             {modo === 'tasacion' && (
               <div className="mb-3 space-y-2">
-                <div className="flex flex-wrap gap-2">
-                  {fotos.map((foto, indice) => (
-                    <div key={`${foto.archivo.name}-${indice}`} className="relative">
-                      <img
-                        src={foto.url}
-                        alt={foto.archivo.name}
-                        className="h-14 w-14 rounded-lg border border-white/10 object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => quitarFoto(indice)}
-                        className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white"
-                        aria-label="Quitar foto"
-                      >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
-                          <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <input
-                  ref={descripcionRef}
-                  value={descripcion}
-                  onChange={(e) => setDescripcion(e.target.value)}
-                  placeholder="Marca, modelo, año y kilometraje (opcional)"
-                  className="w-full rounded-lg border border-white/10 bg-carbono-900 px-3 py-2 text-sm text-plata-100 placeholder:text-plata-600 focus:border-acento-400 focus:outline-none"
-                />
-                <div className="flex items-center gap-2">
-                  <label className="cursor-pointer rounded-full border border-plata-400/25 bg-carbono-800/50 px-3 py-1.5 text-xs font-medium text-plata-200 transition-colors hover:border-plata-300/50 hover:bg-carbono-700/60">
-                    Subir fotos ({fotos.length}/{MAXIMO_FOTOS})
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => agregarFotos(e.target.files)}
+                {sesionTasacion ? (
+                  <>
+                    <p className="text-xs text-plata-400">
+                      Coordinemos tu visita: escribí qué día y entre qué franja horaria te podés acercar
+                      (ej. "el jueves a las 15").
+                    </p>
+                    <textarea
+                      ref={visitaRef}
+                      value={entradaVisita}
+                      onChange={(e) => setEntradaVisita(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          void confirmarVisita()
+                        }
+                      }}
+                      rows={2}
+                      placeholder="Día y franja horaria…"
+                      className="max-h-28 min-h-[52px] w-full resize-none rounded-lg border border-white/10 bg-carbono-900 px-3 py-2 text-sm text-plata-100 placeholder:text-plata-600 focus:border-acento-400 focus:outline-none"
                     />
-                  </label>
-                  <Boton
-                    tamano="sm"
-                    variante="acento"
-                    disabled={fotos.length === 0 || cargando}
-                    onClick={enviarTasacion}
-                  >
-                    Tasá
-                  </Boton>
-                </div>
+                    <Boton
+                      tamano="sm"
+                      variante="acento"
+                      disabled={!entradaVisita.trim() || cargando}
+                      onClick={confirmarVisita}
+                    >
+                      Confirmar visita
+                    </Boton>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2">
+                      {fotos.map((foto, indice) => (
+                        <div key={`${foto.archivo.name}-${indice}`} className="relative">
+                          <img
+                            src={foto.url}
+                            alt={foto.archivo.name}
+                            className="h-14 w-14 rounded-lg border border-white/10 object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => quitarFoto(indice)}
+                            className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white"
+                            aria-label="Quitar foto"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                              <path strokeLinecap="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <textarea
+                      ref={descripcionRef}
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      rows={2}
+                      placeholder="Detallá tu auto: marca, modelo, año, versión, estado, kilometraje, rayones, abolladuras…"
+                      className="max-h-28 min-h-[52px] w-full resize-none rounded-lg border border-white/10 bg-carbono-900 px-3 py-2 text-sm text-plata-100 placeholder:text-plata-600 focus:border-acento-400 focus:outline-none"
+                    />
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer rounded-full border border-plata-400/25 bg-carbono-800/50 px-3 py-1.5 text-xs font-medium text-plata-200 transition-colors hover:border-plata-300/50 hover:bg-carbono-700/60">
+                        Subir fotos ({fotos.length}/{MAXIMO_FOTOS})
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => agregarFotos(e.target.files)}
+                        />
+                      </label>
+                      <Boton
+                        tamano="sm"
+                        variante="acento"
+                        disabled={(fotos.length === 0 && descripcion.trim() === '') || cargando}
+                        onClick={enviarTasacion}
+                      >
+                        Tasá
+                      </Boton>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

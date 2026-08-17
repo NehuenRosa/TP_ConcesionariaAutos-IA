@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useParams, useNavigate } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { Vehiculo } from '../types/vehiculo'
 import { useAuth } from '../hooks/useAuth'
@@ -14,6 +14,7 @@ function formatearKilometraje(kilometraje: number): string {
 
 export function DetalleVehiculo() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const { usuario } = useAuth()
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null)
   const [imagenActiva, setImagenActiva] = useState(0)
@@ -25,6 +26,9 @@ export function DetalleVehiculo() {
   const [enviandoConsulta, setEnviandoConsulta] = useState(false)
   const [errorConsulta, setErrorConsulta] = useState<string | null>(null)
   const [exitoConsulta, setExitoConsulta] = useState(false)
+
+  const [cotizando, setCotizando] = useState(false)
+  const [errorCotizacion, setErrorCotizacion] = useState<string | null>(null)
 
   const esCliente = usuario?.rol === 'cliente'
 
@@ -72,6 +76,22 @@ export function DetalleVehiculo() {
       setErrorConsulta(e instanceof ErrorApi ? e.message : 'No se pudo enviar la consulta')
     } finally {
       setEnviandoConsulta(false)
+    }
+  }
+
+  const handleCotizar = async () => {
+    if (!vehiculo || cotizando) return
+
+    setCotizando(true)
+    setErrorCotizacion(null)
+
+    try {
+      const cotizacion = await api.crearCotizacion({ vehiculoId: vehiculo.id })
+      navigate(`/mis-cotizaciones/${cotizacion.id}`)
+    } catch (e: unknown) {
+      setErrorCotizacion(e instanceof ErrorApi ? e.message : 'No se pudo iniciar la cotización')
+    } finally {
+      setCotizando(false)
     }
   }
 
@@ -185,6 +205,9 @@ export function DetalleVehiculo() {
           <div className="space-y-3 border-t border-white/8 pt-6">
             {esCliente ? (
               <>
+                <Boton variante="acento" tamano="lg" className="w-full" onClick={handleCotizar} disabled={cotizando}>
+                  {cotizando ? 'Creando cotización…' : 'Cotizar este vehículo'}
+                </Boton>
                 <Boton tamano="lg" className="w-full">
                   <Link to={`/catalogo/${vehiculo.id}/test-drive`}>Solicitar test drive</Link>
                 </Boton>
@@ -192,6 +215,12 @@ export function DetalleVehiculo() {
                 <Boton variante="secundario" tamano="lg" className="w-full">
                   <Link to={`/catalogo/${vehiculo.id}/reservar`}>Reservar este vehículo</Link>
                 </Boton>
+
+                {errorCotizacion && (
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+                    {errorCotizacion}
+                  </div>
+                )}
 
                 {exitoConsulta ? (
                   <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm text-emerald-300">

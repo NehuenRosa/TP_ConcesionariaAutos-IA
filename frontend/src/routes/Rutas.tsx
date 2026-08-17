@@ -20,6 +20,7 @@ import { FormularioReserva } from '../pages/FormularioReserva'
 import { MisReservas } from '../pages/MisReservas'
 import { GestionReservas } from '../pages/GestionReservas'
 import { GestionUsuarios } from '../pages/GestionUsuarios'
+import { MisCotizaciones } from '../pages/MisCotizaciones'
 
 export function Rutas() {
   return (
@@ -139,6 +140,22 @@ export function Rutas() {
           element={
             <RutaProtegida rol="cliente">
               <MisTestDrives />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-cotizaciones"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisCotizaciones />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/mis-cotizaciones/:id"
+          element={
+            <RutaProtegida rol="cliente">
+              <MisCotizaciones />
             </RutaProtegida>
           }
         />

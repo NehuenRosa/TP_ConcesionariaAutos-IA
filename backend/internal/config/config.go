@@ -17,6 +17,9 @@ type Configuracion struct {
 	BDNombre     string
 	BDSSL        string
 	JWTSecreto   string
+	// ClaveEncriptacion cifra el contenido de las cotizaciones en reposo
+	// (AES-256-GCM). Si está vacía se deriva del secreto JWT.
+	ClaveEncriptacion string
 	OrigenesCORS string
 	// ProveedorLLM indica el proveedor del LLM: "googleai" (nube, por defecto
 	// si hay GOOGLE_API_KEY) u "ollama" (local).
@@ -63,6 +66,7 @@ func Cargar() Configuracion {
 		BDNombre:     obtener("BD_NOMBRE", "concesionaria"),
 		BDSSL:        obtener("BD_SSL", "disable"),
 		JWTSecreto:    obtener("JWT_SECRETO", "cambiar-en-produccion"),
+		ClaveEncriptacion: obtener("CLAVE_ENCRIPTACION", ""),
 		OrigenesCORS:  obtener("CORS_ORIGENES", "*"),
 		ProveedorLLM:  proveedor,
 		GoogleAIKey:   claveGoogleAI,

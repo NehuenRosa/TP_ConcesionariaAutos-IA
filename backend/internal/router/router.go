@@ -1,6 +1,7 @@
 package router
 
 import (
+	"concesionaria/backend/internal/cifrado"
 	"concesionaria/backend/internal/config"
 	"concesionaria/backend/internal/handlers"
 	"concesionaria/backend/internal/middleware"
@@ -47,9 +48,23 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioMetricas := services.NuevoMetricasService(repositorioMetricas)
 	handlerMetricas := handlers.NuevoMetricasHandler(servicioMetricas)
 
+	claveEncriptacion := configuracion.ClaveEncriptacion
+	if claveEncriptacion == "" {
+		claveEncriptacion = configuracion.JWTSecreto
+	}
+	cifrador, err := cifrado.NuevoCifrador(claveEncriptacion)
+	if err != nil {
+		panic(err)
+	}
+
 	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
-	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, configuracion.ProveedorLLM, configuracion.GoogleAIKey, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
+	repositorioTasaciones := repositories.NuevoTasacionRepository(base)
+	repositorioCotizaciones := repositories.NuevoCotizacionRepository(base)
+	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, repositorioTasaciones, repositorioCotizaciones, cifrador, configuracion.ProveedorLLM, configuracion.GoogleAIKey, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
 	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
+
+	servicioCotizaciones := services.NuevoCotizacionService(repositorioCotizaciones, repositorioVehiculos, cifrador, servicioChatbot)
+	handlerCotizaciones := handlers.NuevoCotizacionHandler(servicioCotizaciones)
 
 	api := enrutador.Group("/api")
 	{
@@ -57,8 +72,9 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 
 		chatbot := api.Group("/chatbot")
 		{
-			chatbot.POST("/mensajes", handlerChatbot.Responder)
+			chatbot.POST("/mensajes", middleware.AutenticacionOpcional(configuracion.JWTSecreto), handlerChatbot.Responder)
 			chatbot.POST("/tasacion", handlerChatbot.Tasacion)
+			chatbot.POST("/tasacion/confirmar", handlerChatbot.ConfirmarTasacion)
 		}
 
 		autenticacion := api.Group("/auth")
@@ -162,6 +178,16 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 				gestionReservas.PUT("/:id/confirmar", handlerReservas.ConfirmarVenta)
 				gestionReservas.PUT("/:id/cancelar", handlerReservas.CancelarComoVendedor)
 			}
+		}
+
+		cotizaciones := api.Group("/cotizaciones")
+		cotizaciones.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
+		{
+			cotizaciones.POST("", handlerCotizaciones.Crear)
+			cotizaciones.GET("/mis-cotizaciones", handlerCotizaciones.ListarMisCotizaciones)
+			cotizaciones.GET("/:id", handlerCotizaciones.Obtener)
+			cotizaciones.POST("/:id/mensajes", handlerCotizaciones.EnviarMensaje)
+			cotizaciones.PUT("/:id/cerrar", handlerCotizaciones.Cerrar)
 		}
 	}
 

@@ -217,3 +217,89 @@ func (f *fakeConsultaRepository) Eliminar(_ context.Context, id uint) error {
 	}
 	return gorm.ErrRecordNotFound
 }
+
+type fakeCotizacionRepository struct {
+	porID            map[uint]*models.Cotizacion
+	siguiente        uint
+	siguienteMensaje uint
+}
+
+func nuevoFakeCotizacionRepository() *fakeCotizacionRepository {
+	return &fakeCotizacionRepository{
+		porID:            make(map[uint]*models.Cotizacion),
+		siguiente:        1,
+		siguienteMensaje: 1,
+	}
+}
+
+func (f *fakeCotizacionRepository) Crear(_ context.Context, cotizacion *models.Cotizacion) (*models.Cotizacion, error) {
+	cotizacion.ID = f.siguiente
+	f.siguiente++
+	for i := range cotizacion.Mensajes {
+		cotizacion.Mensajes[i].CotizacionID = cotizacion.ID
+		cotizacion.Mensajes[i].ID = f.siguienteMensaje
+		f.siguienteMensaje++
+	}
+	// Se guarda una copia: el servicio descifra en el modelo recibido y no debe
+	// afectar al valor persistido.
+	copia := copiarCotizacion(cotizacion)
+	f.porID[cotizacion.ID] = &copia
+	return &copia, nil
+}
+
+func (f *fakeCotizacionRepository) AgregarMensaje(_ context.Context, mensaje *models.MensajeCotizacion) error {
+	cotizacion, ok := f.porID[mensaje.CotizacionID]
+	if !ok {
+		return gorm.ErrRecordNotFound
+	}
+	mensaje.ID = f.siguienteMensaje
+	f.siguienteMensaje++
+	cotizacion.Mensajes = append(cotizacion.Mensajes, *mensaje)
+	return nil
+}
+
+func (f *fakeCotizacionRepository) ObtenerPorID(_ context.Context, id uint) (*models.Cotizacion, error) {
+	if cotizacion, ok := f.porID[id]; ok {
+		copia := copiarCotizacion(cotizacion)
+		return &copia, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (f *fakeCotizacionRepository) ListarPorCliente(_ context.Context, clienteID uint) ([]models.Cotizacion, error) {
+	var cotizaciones []models.Cotizacion
+	for _, cotizacion := range f.porID {
+		if cotizacion.ClienteID == clienteID {
+			cotizaciones = append(cotizaciones, copiarCotizacion(cotizacion))
+		}
+	}
+	return cotizaciones, nil
+}
+
+func (f *fakeCotizacionRepository) Actualizar(_ context.Context, cotizacion *models.Cotizacion) error {
+	copia := copiarCotizacion(cotizacion)
+	f.porID[cotizacion.ID] = &copia
+	return nil
+}
+
+// copiarCotizacion devuelve una copia profunda (mensajes incluidos) para que
+// las mutaciones del servicio no alteren el estado persistido del fake.
+func copiarCotizacion(cotizacion *models.Cotizacion) models.Cotizacion {
+	copia := *cotizacion
+	copia.Mensajes = make([]models.MensajeCotizacion, len(cotizacion.Mensajes))
+	copy(copia.Mensajes, cotizacion.Mensajes)
+	return copia
+}
+
+// fakeGeneradorCotizacion devuelve una respuesta fija basada en el mensaje del
+// cliente, sin llamar a ningún LLM.
+type fakeGeneradorCotizacion struct {
+	respuestas map[string]string
+}
+
+func (f *fakeGeneradorCotizacion) GenerarCotizacion(_ context.Context, _ models.Vehiculo, _ []TurnoChat, mensaje string) (string, error) {
+	if respuesta, ok := f.respuestas[mensaje]; ok {
+		return respuesta, nil
+	}
+	return "Respuesta para: " + mensaje, nil
+}

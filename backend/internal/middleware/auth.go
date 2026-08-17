@@ -33,6 +33,24 @@ func AutenticacionJWT(secreto string) gin.HandlerFunc {
 	}
 }
 
+// AutenticacionOpcional valida el token JWT solo si viene en el encabezado;
+// si no viene o es inválido, continúa con la petición como anónima. Se usa en
+// rutas públicas donde la identidad mejora la experiencia (por ejemplo, crear
+// una cotización desde el chat) pero no es obligatoria.
+func AutenticacionOpcional(secreto string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		encabezado := c.GetHeader("Authorization")
+		if strings.HasPrefix(encabezado, "Bearer ") {
+			reclamos, err := token.Validar(strings.TrimPrefix(encabezado, "Bearer "), secreto)
+			if err == nil {
+				c.Set("usuario_id", strconv.FormatUint(uint64(reclamos.UsuarioID), 10))
+				c.Set("rol", reclamos.Rol)
+			}
+		}
+		c.Next()
+	}
+}
+
 // ExigirRol verifica que el rol del usuario autenticado sea el requerido o
 // administrador (que tiene acceso a todas las rutas protegidas).
 func ExigirRol(rolRequerido string) gin.HandlerFunc {

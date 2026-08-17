@@ -43,6 +43,7 @@ export function LayoutBase() {
   const enlaces = [
     { a: '/catalogo', texto: 'Catálogo', mostrar: true },
     { a: '/mis-consultas', texto: 'Mis consultas', mostrar: esCliente, notificacion: esCliente },
+    { a: '/mis-cotizaciones', texto: 'Cotizaciones', mostrar: esCliente },
     { a: '/mis-test-drives', texto: 'Test drives', mostrar: esCliente },
     { a: '/mis-reservas', texto: 'Reservas', mostrar: esCliente },
     { a: '/vendedor/bandeja', texto: 'Bandeja', mostrar: esVendedor, notificacion: esVendedor },
@@ -194,6 +195,13 @@ export function LayoutBase() {
                     </Link>
                   </li>
                 )}
+                {usuario?.rol === 'cliente' && (
+                  <li>
+                    <Link to="/mis-cotizaciones" className="text-plata-300 transition-colors hover:text-plata-100">
+                      Mis cotizaciones
+                    </Link>
+                  </li>
+                )}
                 {usuario?.rol === 'vendedor' && (
                   <li>
                     <Link to="/vendedor/bandeja" className="text-plata-300 transition-colors hover:text-plata-100">
@@ -267,7 +275,10 @@ export function LayoutBase() {
         </div>
       )}
 
-      <Chatbot />
+      {/* La key ligada al usuario fuerza el remontaje del widget al cambiar de
+          sesión (o al desloguear), así la conversación no se comparte entre
+          usuarios distintos. */}
+      <Chatbot key={usuario?.id ?? 'invitado'} />
     </div>
   )
 }
