@@ -8,6 +8,7 @@ interface ContextoSesion {
   cargando: boolean
   esAdministrador: boolean
   iniciarSesion: (datos: DatosLogin) => Promise<void>
+  iniciarSesionConGoogle: (credencial: string) => Promise<void>
   registrar: (datos: DatosRegistro) => Promise<void>
   cerrarSesion: () => void
 }
@@ -48,6 +49,12 @@ export function ProveedorAutenticacion({ children }: { children: ReactNode }) {
     setUsuario(respuesta.usuario)
   }
 
+  async function iniciarSesionConGoogle(credencial: string) {
+    const respuesta = await api.iniciarSesionGoogle({ credencial })
+    guardarToken(respuesta.token)
+    setUsuario(respuesta.usuario)
+  }
+
   async function registrar(datos: DatosRegistro) {
     await api.registrar(datos)
     await iniciarSesion({ email: datos.email, password: datos.password })
@@ -59,16 +66,17 @@ export function ProveedorAutenticacion({ children }: { children: ReactNode }) {
   }
 
   return (
-    <ContextoAutenticacion.Provider
-      value={{
-        usuario,
-        cargando,
-        esAdministrador: usuario?.rol === 'administrador',
-        iniciarSesion,
-        registrar,
-        cerrarSesion,
-      }}
-    >
+      <ContextoAutenticacion.Provider
+        value={{
+          usuario,
+          cargando,
+          esAdministrador: usuario?.rol === 'administrador',
+          iniciarSesion,
+          iniciarSesionConGoogle,
+          registrar,
+          cerrarSesion,
+        }}
+      >
       {children}
     </ContextoAutenticacion.Provider>
   )

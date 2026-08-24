@@ -29,6 +29,17 @@ type Configuracion struct {
 	ModeloChatbot string
 	ModeloVision string
 	ArgAutosURL  string
+	// GoogleClientID habilita "Continuar con Google" (CU-11) cuando está
+	// definido: es la audiencia válida de los ID tokens de Google.
+	GoogleClientID string
+	// GoogleClientSecret queda reservado para flujos futuros con código de
+	// autorización; el flujo actual por ID token no lo necesita.
+	GoogleClientSecret string
+	// Datos bancarios que se muestran al cliente para transferir la seña de
+	// la reserva (CU-08). Vacíos = el frontend indica que los pasará el
+	// personal.
+	CbuConcesionaria  string
+	AliasConcesionaria string
 }
 
 // Cargar lee las variables de entorno y devuelve la configuración de la API.
@@ -74,6 +85,11 @@ func Cargar() Configuracion {
 		ModeloChatbot: obtener("MODELO_CHATBOT", modeloChatbotPorDefecto),
 		ModeloVision:  obtener("MODELO_VISION", modeloVisionPorDefecto),
 		ArgAutosURL:   obtener("ARGAUTOS_URL", "https://argautos.com/api/v1"),
+		// Sin default: vacío = acceso con Google deshabilitado.
+		GoogleClientID:     obtener("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: obtener("GOOGLE_CLIENT_SECRET", ""),
+		CbuConcesionaria:   obtener("CBU_CONCESIONARIA", ""),
+		AliasConcesionaria: obtener("ALIAS_CONCESIONARIA", ""),
 	}
 }
 

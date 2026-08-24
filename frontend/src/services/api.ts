@@ -5,10 +5,10 @@ import type {
   Vehiculo,
   VehiculoEntrada,
 } from '../types/vehiculo'
-import type { DatosLogin, DatosRegistro, DatosUsuarioAdmin, RespuestaLogin, Usuario } from '../types/usuario'
+import type { DatosLogin, DatosLoginGoogle, DatosRegistro, DatosUsuarioAdmin, ProveedoresAuth, RespuestaLogin, Usuario } from '../types/usuario'
 import type { ConsultaResumen, CrearConsulta, Mensaje } from '../types/consulta'
 import type { FranjaHoraria, SolicitarTestDrive, TurnoTestDrive } from '../types/testDrive'
-import type { CrearReserva, Reserva } from '../types/reserva'
+import type { CrearReserva, DatosTransferencia, Reserva } from '../types/reserva'
 import type { Metricas } from '../types/metricas'
 import type {
   Cotizacion,
@@ -93,23 +93,13 @@ async function peticion<T>(ruta: string, opciones?: RequestInit): Promise<T> {
   }
 }
 
-// peticionMultipart envía un formulario multipart con fotos, un campo de texto
-// y un identificador de sesión opcional, sin fijar Content-Type para que el
-// navegador agregue el límite del multipart.
-async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: string, sesionId?: string): Promise<T> {
+// peticionFormulario envía un FormData (multipart) con token si existe, sin
+// fijar Content-Type para que el navegador agregue el límite del multipart.
+async function peticionFormulario<T>(ruta: string, formulario: FormData): Promise<T> {
   const controlador = new AbortController()
   const temporizador = setTimeout(() => controlador.abort(), TIEMPO_MAXIMO_MILISEGUNDOS)
   try {
     const token = obtenerToken()
-    const formulario = new FormData()
-    for (const foto of fotos) {
-      formulario.append('fotos', foto)
-    }
-    formulario.append('descripcion', descripcion)
-    if (sesionId) {
-      formulario.append('sesion_id', sesionId)
-    }
-
     const respuesta = await fetch(`${urlBase}${ruta}`, {
       method: 'POST',
       headers: {
@@ -142,6 +132,20 @@ async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: st
   }
 }
 
+// peticionMultipart arma el formulario de la tasación del chatbot y delega en
+// el envío genérico de multipart.
+async function peticionMultipart<T>(ruta: string, fotos: File[], descripcion: string, sesionId?: string): Promise<T> {
+  const formulario = new FormData()
+  for (const foto of fotos) {
+    formulario.append('fotos', foto)
+  }
+  formulario.append('descripcion', descripcion)
+  if (sesionId) {
+    formulario.append('sesion_id', sesionId)
+  }
+  return peticionFormulario<T>(ruta, formulario)
+}
+
 export const api = {
   obtenerEstado: () => peticion<{ estado: string }>('/health'),
   registrar: (datos: DatosRegistro) =>
@@ -154,6 +158,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(datos),
     }),
+  iniciarSesionGoogle: (datos: DatosLoginGoogle) =>
+    peticion<RespuestaLogin>('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify(datos),
+    }),
+  obtenerProveedoresAuth: () => peticion<ProveedoresAuth>('/auth/proveedores'),
   obtenerPerfil: () => peticion<Usuario>('/auth/perfil'),
 
   // Usuarios (administrador)
@@ -221,7 +231,7 @@ export const api = {
 
   // Notificaciones
   obtenerContadorNotificaciones: () =>
-    peticion<{ contador: number }>('/notificaciones/contador'),
+    peticion<{ contador: number; consultas: number; cotizaciones: number }>('/notificaciones/contador'),
 
   // Test drives
   obtenerFranjas: () => peticion<FranjaHoraria[]>('/test-drives/franjas'),
@@ -248,6 +258,36 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(datos),
     }),
+  obtenerDatosTransferencia: (vehiculoId: number) =>
+    peticion<DatosTransferencia>(`/reservas/datos-transferencia?vehiculoId=${vehiculoId}`),
+  subirComprobanteReserva: (id: number, archivo: File) => {
+    const formulario = new FormData()
+    formulario.append('comprobante', archivo)
+    return peticionFormulario<Reserva>(`/reservas/${id}/comprobante`, formulario)
+  },
+  // Devuelve la imagen del comprobante como Blob para poder mostrarla con
+  // URL.createObjectURL (la petición necesita el token en el encabezado).
+  obtenerComprobanteReserva: async (id: number): Promise<Blob> => {
+    const token = obtenerToken()
+    const respuesta = await fetch(`${urlBase}/reservas/${id}/comprobante`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+    if (!respuesta.ok) {
+      let mensaje = 'Ocurrió un error inesperado. Intente nuevamente.'
+      try {
+        const cuerpo = (await respuesta.json()) as { error?: string }
+        if (cuerpo.error) {
+          mensaje = cuerpo.error
+        }
+      } catch {
+        // Se ignora: se mantiene el mensaje por defecto.
+      }
+      throw new ErrorApi(mensaje, respuesta.status)
+    }
+    return respuesta.blob()
+  },
   listarMisReservas: () => peticion<Reserva[]>('/reservas/mis-reservas'),
   cancelarReserva: (id: number) =>
     peticion<Reserva>(`/reservas/${id}`, { method: 'DELETE' }),
@@ -255,8 +295,8 @@ export const api = {
     peticion<Reserva[]>(`/reservas${estado ? `?estado=${estado}` : ''}`),
   confirmarReservaVenta: (id: number) =>
     peticion<Reserva>(`/reservas/${id}/confirmar`, { method: 'PUT' }),
-  cancelarReservaVendedor: (id: number) =>
-    peticion<Reserva>(`/reservas/${id}/cancelar`, { method: 'PUT' }),
+  cancelarReservaVendedor: (id: number, motivo: string) =>
+    peticion<Reserva>(`/reservas/${id}/cancelar`, { method: 'PUT', body: JSON.stringify({ motivo }) }),
 
   // Métricas del panel de administración
   obtenerMetricas: (periodo?: number) =>
@@ -277,6 +317,19 @@ export const api = {
     }),
   cerrarCotizacion: (id: number) =>
     peticion<Cotizacion>(`/cotizaciones/${id}/cerrar`, { method: 'PUT' }),
+
+  // Atención personal de cotizaciones (vendedor)
+  listarBandejaCotizaciones: () => peticion<CotizacionResumen[]>('/cotizaciones/bandeja'),
+  obtenerCotizacionPersonal: (id: number) => peticion<Cotizacion>(`/cotizaciones/${id}/personal`),
+  tomarCotizacion: (id: number) =>
+    peticion<Cotizacion>(`/cotizaciones/${id}/tomar`, { method: 'PUT' }),
+  responderCotizacionVendedor: (id: number, mensaje: string) =>
+    peticion<Cotizacion>(`/cotizaciones/${id}/mensajes-vendedor`, {
+      method: 'POST',
+      body: JSON.stringify({ mensaje }),
+    }),
+  cerrarCotizacionPersonal: (id: number) =>
+    peticion<Cotizacion>(`/cotizaciones/${id}/cerrar-personal`, { method: 'PUT' }),
 
   // Chatbot
   enviarMensajeChatbot: (datos: PeticionChatbot) =>

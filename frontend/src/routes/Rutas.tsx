@@ -21,6 +21,8 @@ import { MisReservas } from '../pages/MisReservas'
 import { GestionReservas } from '../pages/GestionReservas'
 import { GestionUsuarios } from '../pages/GestionUsuarios'
 import { MisCotizaciones } from '../pages/MisCotizaciones'
+import { BandejaCotizaciones } from '../pages/BandejaCotizaciones'
+import { ChatCotizacionVendedor } from '../pages/ChatCotizacionVendedor'
 
 export function Rutas() {
   return (
@@ -100,6 +102,22 @@ export function Rutas() {
           element={
             <RutaProtegida rol="vendedor">
               <ChatVendedor />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/vendedor/cotizaciones"
+          element={
+            <RutaProtegida rol="vendedor">
+              <BandejaCotizaciones />
+            </RutaProtegida>
+          }
+        />
+        <Route
+          path="/vendedor/cotizaciones/:id"
+          element={
+            <RutaProtegida rol="vendedor">
+              <ChatCotizacionVendedor />
             </RutaProtegida>
           }
         />

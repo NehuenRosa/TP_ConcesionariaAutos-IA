@@ -59,7 +59,11 @@ func (h *ChatbotHandler) Responder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"respuesta": respuesta.Respuesta, "cotizacionId": respuesta.CotizacionID})
+	c.JSON(http.StatusOK, gin.H{
+		"respuesta":            respuesta.Respuesta,
+		"cotizacionId":         respuesta.CotizacionID,
+		"vehiculosMencionados": respuesta.VehiculosMencionados,
+	})
 }
 
 // Tasacion procesa las fotos del auto del usuario y responde con la

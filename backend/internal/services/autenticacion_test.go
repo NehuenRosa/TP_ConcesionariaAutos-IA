@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"concesionaria/backend/internal/googleid"
 	"concesionaria/backend/internal/models"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
 func nuevoServicioAutenticacion(repo *fakeUsuarioRepository) AutenticacionService {
-	return NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken)
+	return NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken, nil)
 }
 
 func TestRegistrarExitoso(t *testing.T) {
@@ -153,5 +154,118 @@ func TestObtenerPorID(t *testing.T) {
 	_, err = servicio.ObtenerPorID(context.Background(), 99)
 	if !errors.Is(err, ErrUsuarioNoEncontrado) {
 		t.Errorf("se esperaba ErrUsuarioNoEncontrado, se obtuvo %v", err)
+	}
+}
+
+// fakeVerificadorGoogle simula la verificación de credenciales de Google.
+type fakeVerificadorGoogle struct {
+	identidad *googleid.Identidad
+	err       error
+}
+
+func (f *fakeVerificadorGoogle) Verificar(ctx context.Context, idToken string) (*googleid.Identidad, error) {
+	return f.identidad, f.err
+}
+
+func TestIniciarSesionConGoogleCreaCliente(t *testing.T) {
+	repo := nuevoFakeUsuarioRepository()
+	servicio := NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken, &fakeVerificadorGoogle{
+		identidad: &googleid.Identidad{Sub: "sub-google-1", Email: "Nuevo@Ejemplo.com", Nombre: "Nuevo Cliente"},
+	})
+
+	usuario, tokenString, err := servicio.IniciarSesionConGoogle(context.Background(), "credencial")
+	if err != nil {
+		t.Fatalf("IniciarSesionConGoogle devolvió error: %v", err)
+	}
+	if tokenString == "" {
+		t.Error("se esperaba un token JWT no vacío")
+	}
+	if usuario.Rol != models.RolCliente || usuario.Proveedor != models.ProveedorGoogle {
+		t.Errorf("usuario creado incorrecto: rol=%q proveedor=%q", usuario.Rol, usuario.Proveedor)
+	}
+	if usuario.GoogleSub == nil || *usuario.GoogleSub != "sub-google-1" {
+		t.Errorf("google_sub no guardado: %v", usuario.GoogleSub)
+	}
+	if usuario.Password != "" {
+		t.Error("una cuenta creada con Google no debe tener contraseña local")
+	}
+	if _, ok := repo.porEmail["nuevo@ejemplo.com"]; !ok {
+		t.Error("el usuario no quedó persistido con el email normalizado")
+	}
+}
+
+func TestIniciarSesionConGoogleVinculaPorEmail(t *testing.T) {
+	repo := nuevoFakeUsuarioRepository()
+	hash, _ := bcrypt.GenerateFromPassword([]byte("secreto123"), bcrypt.DefaultCost)
+	repo.porEmail["ana@ejemplo.com"] = &models.Usuario{
+		ID: 1, Nombre: "Ana", Email: "ana@ejemplo.com",
+		Password: string(hash), Rol: models.RolVendedor, Proveedor: models.ProveedorLocal,
+	}
+	repo.porID[1] = repo.porEmail["ana@ejemplo.com"]
+
+	servicio := NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken, &fakeVerificadorGoogle{
+		identidad: &googleid.Identidad{Sub: "sub-ana", Email: "ana@ejemplo.com", Nombre: "Otro Nombre"},
+	})
+
+	usuario, _, err := servicio.IniciarSesionConGoogle(context.Background(), "credencial")
+	if err != nil {
+		t.Fatalf("IniciarSesionConGoogle devolvió error: %v", err)
+	}
+	if len(repo.porEmail) != 1 {
+		t.Errorf("se esperaba un único usuario, hay %d", len(repo.porEmail))
+	}
+	if usuario.ID != 1 {
+		t.Errorf("debió vincularse al usuario existente ID 1, se obtuvo %d", usuario.ID)
+	}
+	if usuario.Rol != models.RolVendedor {
+		t.Errorf("el rol original debió conservarse, se obtuvo %q", usuario.Rol)
+	}
+	if usuario.Nombre != "Ana" {
+		t.Errorf("el nombre original debió conservarse, se obtuvo %q", usuario.Nombre)
+	}
+	if usuario.Proveedor != models.ProveedorGoogle || usuario.GoogleSub == nil || *usuario.GoogleSub != "sub-ana" {
+		t.Errorf("vinculación no aplicada: proveedor=%q google_sub=%v", usuario.Proveedor, usuario.GoogleSub)
+	}
+}
+
+func TestIniciarSesionConGoogleRecurrenteNoDuplica(t *testing.T) {
+	repo := nuevoFakeUsuarioRepository()
+	servicio := NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken, &fakeVerificadorGoogle{
+		identidad: &googleid.Identidad{Sub: "sub-fijo", Email: "recurrente@ejemplo.com", Nombre: "Recurrente"},
+	})
+
+	for i := 0; i < 3; i++ {
+		if _, _, err := servicio.IniciarSesionConGoogle(context.Background(), "credencial"); err != nil {
+			t.Fatalf("ingreso %d falló: %v", i+1, err)
+		}
+	}
+	if len(repo.porEmail) != 1 {
+		t.Errorf("se esperaba un único usuario tras ingresos repetidos, hay %d", len(repo.porEmail))
+	}
+}
+
+func TestIniciarSesionConGoogleSinConfigurar(t *testing.T) {
+	servicio := nuevoServicioAutenticacion(nuevoFakeUsuarioRepository())
+	if servicio.GoogleHabilitado() {
+		t.Error("sin verificador, Google debe estar deshabilitado")
+	}
+	_, _, err := servicio.IniciarSesionConGoogle(context.Background(), "credencial")
+	if !errors.Is(err, ErrGoogleNoDisponible) {
+		t.Errorf("se esperaba ErrGoogleNoDisponible, se obtuvo %v", err)
+	}
+}
+
+func TestIniciarSesionConGoogleCredencialInvalida(t *testing.T) {
+	repo := nuevoFakeUsuarioRepository()
+	servicio := NuevoAutenticacionService(repo, "secreto-de-prueba", DuracionToken, &fakeVerificadorGoogle{
+		err: googleid.ErrTokenInvalido,
+	})
+
+	_, _, err := servicio.IniciarSesionConGoogle(context.Background(), "credencial-falsa")
+	if !errors.Is(err, ErrCredencialGoogleInvalida) {
+		t.Errorf("se esperaba ErrCredencialGoogleInvalida, se obtuvo %v", err)
+	}
+	if len(repo.porEmail) != 0 {
+		t.Error("no debe crearse ningún usuario con credencial inválida")
 	}
 }

@@ -9,6 +9,8 @@ import { InicioSesion } from './InicioSesion'
 
 const mocks = vi.hoisted(() => ({
   iniciarSesion: vi.fn(),
+  iniciarSesionGoogle: vi.fn(),
+  obtenerProveedoresAuth: vi.fn(),
   registrar: vi.fn(),
   obtenerPerfil: vi.fn(),
 }))
@@ -57,6 +59,7 @@ describe('InicioSesion', () => {
   beforeEach(() => {
     vi.mocked(api.iniciarSesion).mockReset()
     vi.mocked(api.iniciarSesion).mockResolvedValue({ token: 'token-abc', usuario })
+    vi.mocked(api.obtenerProveedoresAuth).mockResolvedValue({ google: false })
   })
 
   it('redirige a "/" por defecto cuando no hay destino previo', async () => {

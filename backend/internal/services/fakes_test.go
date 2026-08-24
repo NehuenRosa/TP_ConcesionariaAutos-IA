@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"concesionaria/backend/internal/models"
 	"concesionaria/backend/internal/repositories"
@@ -276,9 +277,76 @@ func (f *fakeCotizacionRepository) ListarPorCliente(_ context.Context, clienteID
 	return cotizaciones, nil
 }
 
+func (f *fakeCotizacionRepository) ListarBandeja(_ context.Context) ([]models.Cotizacion, error) {
+	cotizaciones := make([]models.Cotizacion, 0, len(f.porID))
+	for _, cotizacion := range f.porID {
+		cotizaciones = append(cotizaciones, copiarCotizacion(cotizacion))
+	}
+	return cotizaciones, nil
+}
+
 func (f *fakeCotizacionRepository) Actualizar(_ context.Context, cotizacion *models.Cotizacion) error {
 	copia := copiarCotizacion(cotizacion)
 	f.porID[cotizacion.ID] = &copia
+	return nil
+}
+
+func (f *fakeCotizacionRepository) ContarNoLeidosDeCliente(_ context.Context, clienteID uint) (int64, error) {
+	var total int64
+	for _, c := range f.porID {
+		if c.ClienteID != clienteID {
+			continue
+		}
+		for _, m := range c.Mensajes {
+			if m.Remitente == models.RemitenteVendedor && !m.LeidoPorCliente {
+				total++
+			}
+		}
+	}
+	return total, nil
+}
+
+func (f *fakeCotizacionRepository) ContarNoLeidosParaPersonal(_ context.Context, vendedorID uint) (int64, error) {
+	var total int64
+	for _, c := range f.porID {
+		if c.Estado != models.EstadoCotizacionAbierta {
+			continue
+		}
+		if c.VendedorID != nil && *c.VendedorID != vendedorID {
+			continue
+		}
+		for _, m := range c.Mensajes {
+			if m.Remitente == models.RemitenteCliente && !m.LeidoPorVendedor {
+				total++
+			}
+		}
+	}
+	return total, nil
+}
+
+func (f *fakeCotizacionRepository) MarcarLeidasParaCliente(_ context.Context, cotizacionID uint) error {
+	c := f.porID[cotizacionID]
+	if c == nil {
+		return nil
+	}
+	for i := range c.Mensajes {
+		if c.Mensajes[i].Remitente != models.RemitenteCliente {
+			c.Mensajes[i].LeidoPorCliente = true
+		}
+	}
+	return nil
+}
+
+func (f *fakeCotizacionRepository) MarcarLeidasParaPersonal(_ context.Context, cotizacionID uint) error {
+	c := f.porID[cotizacionID]
+	if c == nil {
+		return nil
+	}
+	for i := range c.Mensajes {
+		if c.Mensajes[i].Remitente == models.RemitenteCliente {
+			c.Mensajes[i].LeidoPorVendedor = true
+		}
+	}
 	return nil
 }
 
@@ -302,4 +370,113 @@ func (f *fakeGeneradorCotizacion) GenerarCotizacion(_ context.Context, _ models.
 		return respuesta, nil
 	}
 	return "Respuesta para: " + mensaje, nil
+}
+
+// fakeReservaRepository simula la persistencia de reservas aplicando las mismas
+// reglas de expiración que el repositorio real sobre GORM.
+type fakeReservaRepository struct {
+	porID         map[uint]*models.Reserva
+	comprobantes  map[uint]*models.ComprobanteReserva
+	vehiculos     *fakeVehiculoRepository
+	cantidadLotes int64
+	siguiente     uint
+}
+
+func nuevoFakeReservaRepository(vehiculos *fakeVehiculoRepository) *fakeReservaRepository {
+	return &fakeReservaRepository{
+		porID:        make(map[uint]*models.Reserva),
+		comprobantes: make(map[uint]*models.ComprobanteReserva),
+		vehiculos:    vehiculos,
+		siguiente:    1,
+	}
+}
+
+func (f *fakeReservaRepository) CrearYReservar(_ context.Context, reserva *models.Reserva) (*models.Reserva, error) {
+	reserva.ID = f.siguiente
+	f.siguiente++
+	f.porID[reserva.ID] = reserva
+	return reserva, nil
+}
+
+func (f *fakeReservaRepository) ObtenerPorID(_ context.Context, id uint) (*models.Reserva, error) {
+	if reserva, ok := f.porID[id]; ok {
+		return reserva, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (f *fakeReservaRepository) ListarPorCliente(_ context.Context, _ uint) ([]models.Reserva, error) {
+	return nil, nil
+}
+
+func (f *fakeReservaRepository) Listar(_ context.Context, _ string) ([]models.Reserva, error) {
+	return nil, nil
+}
+
+func (f *fakeReservaRepository) ConfirmarVentaYMarcarVendido(_ context.Context, reserva *models.Reserva) (*models.Reserva, error) {
+	guardada, ok := f.porID[reserva.ID]
+	if !ok || !guardada.EsActiva() {
+		return nil, repositories.ErrReservaYaNoActiva
+	}
+	guardada.Estado = models.EstadoReservaVendida
+	f.marcarVehiculo(guardada.VehiculoID, models.EstadoVendido)
+	return guardada, nil
+}
+
+func (f *fakeReservaRepository) CancelarYLiberar(_ context.Context, reserva *models.Reserva) (*models.Reserva, error) {
+	guardada, ok := f.porID[reserva.ID]
+	if !ok || !guardada.EsActiva() {
+		return nil, repositories.ErrReservaYaNoActiva
+	}
+	guardada.Estado = models.EstadoReservaCancelada
+	f.liberarVehiculo(guardada.VehiculoID)
+	return guardada, nil
+}
+
+func (f *fakeReservaRepository) GuardarComprobante(_ context.Context, reserva *models.Reserva, comprobante *models.ComprobanteReserva) error {
+	comprobante.ID = uint(len(f.comprobantes)) + 1
+	f.comprobantes[reserva.ID] = comprobante
+	guardada := f.porID[reserva.ID]
+	guardada.ComprobanteEnviadoAt = reserva.ComprobanteEnviadoAt
+	return nil
+}
+
+func (f *fakeReservaRepository) ObtenerComprobantePorReservaID(_ context.Context, reservaID uint) (*models.ComprobanteReserva, error) {
+	if comprobante, ok := f.comprobantes[reservaID]; ok {
+		return comprobante, nil
+	}
+	return nil, gorm.ErrRecordNotFound
+}
+
+func (f *fakeReservaRepository) ExpirarSiVencida(_ context.Context, reserva *models.Reserva) (bool, error) {
+	guardada, ok := f.porID[reserva.ID]
+	if !ok || !guardada.ComprobanteVencido(time.Now()) {
+		return false, nil
+	}
+	guardada.Estado = models.EstadoReservaCancelada
+	f.liberarVehiculo(guardada.VehiculoID)
+	return true, nil
+}
+
+func (f *fakeReservaRepository) ExpirarVencidas(_ context.Context) (int64, error) {
+	var cantidad int64
+	for _, reserva := range f.porID {
+		if reserva.ComprobanteVencido(time.Now()) {
+			reserva.Estado = models.EstadoReservaCancelada
+			f.liberarVehiculo(reserva.VehiculoID)
+			cantidad++
+		}
+	}
+	f.cantidadLotes += cantidad
+	return cantidad, nil
+}
+
+func (f *fakeReservaRepository) liberarVehiculo(vehiculoID uint) {
+	f.marcarVehiculo(vehiculoID, models.EstadoDisponible)
+}
+
+func (f *fakeReservaRepository) marcarVehiculo(vehiculoID uint, estado string) {
+	if vehiculo, ok := f.vehiculos.porID[vehiculoID]; ok {
+		vehiculo.Estado = estado
+	}
 }

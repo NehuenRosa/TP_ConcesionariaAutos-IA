@@ -13,6 +13,8 @@ export interface PeticionChatbot {
 export interface RespuestaChatbot {
   respuesta: string
   cotizacionId?: number
+  /** Ids de vehículos del stock que la IA mencionó, para enlazar sus fichas. */
+  vehiculosMencionados?: number[]
 }
 
 export interface RespuestaTasacion {

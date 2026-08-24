@@ -30,9 +30,11 @@ vehículos disponibles.
 | CU-05 | Consulta / cotización | El cliente envía una consulta asociada a un vehículo específico; queda vinculada al vehículo y al cliente. |
 | CU-06 | Gestión de consultas | El vendedor ve la bandeja de consultas, responde y actualiza estado (pendiente, en conversación, cerrada), con historial. |
 | CU-07 | Turno de test drive | El cliente solicita turno eligiendo fecha y franja horaria; el sistema valida disponibilidad y evita superposición. |
-| CU-08 | Reserva de vehículo | El cliente reserva una unidad (disponible → reservado); el vendedor confirma la venta o cancela y libera la unidad. |
+| CU-08 | Reserva de vehículo | El cliente reserva una unidad (disponible → reservado) con seña del 5 %: tiene 2 horas para transferir y subir el comprobante; sin comprobante al vencer, la reserva se anula sola y la unidad vuelve a `disponible`. El vendedor revisa el comprobante y confirma la venta o cancela y libera la unidad. |
 | CU-09 | Panel de administración | Dashboard con vehículos por estado, consultas por período, reservas activas y test drives agendados, con gráficos simples. |
 | CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Gemini en la nube, con Ollama local de respaldo) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
+| CU-11 | Login con Google | Registro e inicio de sesión federados con Google Identity Services: el frontend envía el credential (ID token), el backend lo verifica contra el JWKS de Google (firma, emisor, audiencia, `email_verified`), crea el cliente o vincula la cuenta existente por email y emite el JWT propio del sistema. Requiere `GOOGLE_CLIENT_ID`; sin él, deshabilitado (`503` y botón oculto). |
+| CU-12 | Bandeja de cotizaciones con IA | El vendedor ve las conversaciones de cotización que los clientes iniciaron con la IA, las toma y responde en su nombre: al tomarlas, la IA queda silenciada y los mensajes del personal se guardan con remitente `vendedor`. El cliente ve quién lo atiende. |
 
 El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 
@@ -134,6 +136,33 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 - Un vehículo reservado deja de estar disponible; la reserva confirmada como venta
   lo pasa a `vendido` (CU-08).
 
+### Reserva con seña (CU-08)
+
+- Al crear la reserva (`POST /api/reservas`) el backend fija el plazo de
+  **2 horas** para subir el comprobante y calcula la seña como el **5 % del
+  precio** (`services.PorcentajeSena`); el monto **siempre se compone en
+  código**, nunca en el frontend ni por el LLM.
+- Datos bancarios por entorno: `CBU_CONCESIONARIA` / `ALIAS_CONCESIONARIA`
+  (vacíos = la UI avisa que el personal pasa los datos). Endpoint
+  `GET /api/reservas/datos-transferencia?vehiculoId=`.
+- Comprobante: `POST /api/reservas/:id/comprobante` (multipart campo
+  `comprobante`, JPG/PNG/WebP ≤ 5 MB, guardado como bytea en
+  `comprobantes_reserva`); se puede reenviar mientras la reserva esté activa.
+  La imagen se consulta con `GET /api/reservas/:id/comprobante` (dueño o
+  vendedor/administrador).
+- **Expiración**: una reserva activa sin comprobante vencida se anula sola
+  (estado `cancelada`) y su vehículo vuelve a `disponible`. La aplica un job
+  interno cada 30 s (`main.go`) más chequeos perezosos al operar sobre la
+  reserva. Las reservas históricas (vencimiento cero/nulo) **nunca expiran**.
+- El vendedor verifica el comprobante manualmente antes de confirmar la
+  venta; confirmar sin comprobante dentro del plazo está permitido
+  deliberadamente (pago en efectivo en el local).
+- **Cancelación con motivo**: si el vendedor cancela una reserva activa,
+  `PUT /reservas/:id/cancelar` exige un cuerpo `{motivo}` (no vacío, `400`
+  si falta); se guarda en `MotivoCancelacion`, viaja al cliente como
+  `motivoCancelacion` y se muestra destacado en Mis Reservas. La baja propia
+  del cliente no pide motivo.
+
 ### Turnos de test drive
 
 - El sistema valida disponibilidad y **evita superposición**: no puede existir más
@@ -174,9 +203,29 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   respuesta es honesta (orienta a la concesionaria) — no inventa valores.
 - **Regla de oro**: no cambiar el flujo de la tasación por un prompt que pida al
   LLM "estimar" precios; siempre componer en código con la referencia oficial.
+- **Enlaces a fichas (CU-10)**: cuando el asistente menciona vehículos puntuales
+  del stock, los señala con el marcador interno `[VEHICULO:<id>]` al final de su
+  respuesta. El backend extrae los ids (únicos, máx. 5), los valida contra el
+  contexto servido y los devuelve como `vehiculosMencionados`; el widget muestra
+  chips "Ver ficha" hacia `/catalogo/:id`. Los marcadores nunca llegan al texto
+  visible ni al historial que reenvía el frontend.
 - **Fallback**: si el proveedor LLM está caído (Gemini u Ollama), chat y
   tasación devuelven `200` con un mensaje en español que orienta al usuario (el
   error interno se loguea con `slog`).
+
+### Bandeja de cotizaciones con IA (CU-12)
+
+- La cotización puede pasar de la IA a un vendedor: `PUT /cotizaciones/:id/tomar`
+  asigna el vendedor (`VendedorID`, `FechaToma`) e **idempotente** para él;
+  `409` si otro vendedor la tomó o está cerrada.
+- Con vendedor asignado, la IA queda **silenciada**: `POST /cotizaciones/:id`
+  `/mensajes` del cliente guarda el mensaje sin llamar al generador, y
+  `POST /:id/mensajes-vendedor` guarda la respuesta del personal con remitente
+  `vendedor` (cifrada igual que el resto). Solo responde quien la tomó.
+- Rutas del personal con `ExigirRol("vendedor")`: `/bandeja`, `/:id/personal`,
+  `/:id/tomar`, `/:id/mensajes-vendedor`, `/:id/cerrar-personal`.
+- El cliente ve en su panel quién lo atiende y los mensajes del asesor con su
+  etiqueta propia; ambos lados refrescan cada 10 s.
 
 ## Flujo de trabajo con OpenSpec
 
@@ -257,7 +306,10 @@ secreto JWT (`JWT_SECRETO`). El frontend usa `VITE_API_URL` para apuntar a la AP
 Para el chatbot: `PROVEEDOR_LLM`, `GOOGLE_API_KEY` (Gemini en la nube, gratis en
 Google AI Studio), `OLLAMA_URL` (respaldo local), `MODELO_CHATBOT`,
 `MODELO_VISION` (modelos a descargar con `ollama pull` si usás local) y
-`ARGAUTOS_URL` (fuente de precios de la CCA).
+`ARGAUTOS_URL` (fuente de precios de la CCA). Para el login con Google
+(CU-11): `GOOGLE_CLIENT_ID` (client ID OAuth "Aplicación web" con el origen
+del frontend autorizado; vacío = deshabilitado) y `GOOGLE_CLIENT_SECRET`
+(reservado, no requerido por el flujo actual).
 
 `docker compose` aplica fail-fast: **falla si `BD_PASSWORD` o `JWT_SECRETO` no
 están definidas** en `.env` (no hay defaults inseguros). Los puertos publicados
