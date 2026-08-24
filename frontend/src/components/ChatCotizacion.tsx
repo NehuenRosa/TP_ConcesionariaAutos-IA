@@ -10,10 +10,13 @@ interface ChatCotizacionProps {
   onCambio: () => void
 }
 
+const INTERVALO_ACTUALIZACION_MS = 10000
+
 export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) {
   const [mensajes, setMensajes] = useState<MensajeCotizacion[]>([])
   const [estado, setEstado] = useState<'abierta' | 'cerrada'>('abierta')
   const [vehiculo, setVehiculo] = useState<Cotizacion['vehiculo'] | null>(null)
+  const [vendedor, setVendedor] = useState<Cotizacion['vendedor']>()
   const [nuevoMensaje, setNuevoMensaje] = useState('')
   const [cargando, setCargando] = useState(true)
   const [enviando, setEnviando] = useState(false)
@@ -32,7 +35,10 @@ export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) 
         setMensajes(datos.mensajes)
         setEstado(datos.estado)
         setVehiculo(datos.vehiculo)
+        setVendedor(datos.vendedor)
         setError(null)
+        // Abrir el hilo lo marca como leído en el servidor: refresca el contador.
+        window.dispatchEvent(new Event('mensajes-leidos'))
       })
       .catch((e: unknown) => {
         if (cancelado) return
@@ -45,6 +51,22 @@ export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) 
     return () => {
       cancelado = true
     }
+  }, [cotizacionId])
+
+  // La conversación se refresca sola para ver las respuestas del vendedor.
+  useEffect(() => {
+    const temporizador = setInterval(async () => {
+      try {
+        const datos = await api.obtenerCotizacion(cotizacionId)
+        setMensajes(datos.mensajes)
+        setEstado(datos.estado)
+        setVehiculo(datos.vehiculo)
+        setVendedor(datos.vendedor)
+      } catch {
+        // Se ignora: el próximo intento lo vuelve a traer.
+      }
+    }, INTERVALO_ACTUALIZACION_MS)
+    return () => clearInterval(temporizador)
   }, [cotizacionId])
 
   useEffect(() => {
@@ -69,10 +91,14 @@ export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) 
 
     try {
       const resultado = await api.enviarMensajeCotizacion(cotizacionId, contenido)
-      setMensajes((prev) => [
-        ...prev,
-        { id: -Date.now() - 1, remitente: 'ia', contenido: resultado.respuesta, createdAt: new Date().toISOString() },
-      ])
+      // Si un vendedor tomó la conversación, la IA queda silenciada y no
+      // responde: el mensaje queda esperando la respuesta del personal.
+      if (resultado.respuesta !== '') {
+        setMensajes((prev) => [
+          ...prev,
+          { id: -Date.now() - 1, remitente: 'ia', contenido: resultado.respuesta, createdAt: new Date().toISOString() },
+        ])
+      }
     } catch (e: unknown) {
       setMensajes((prev) => prev.slice(0, -1))
       setNuevoMensaje(contenido)
@@ -143,6 +169,12 @@ export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) 
         </div>
       </div>
 
+      {vendedor && (
+        <div className="border-b border-acento-400/20 bg-acento-500/10 px-5 py-2 text-xs text-acento-300">
+          Estás siendo atendido por {vendedor.nombre}. El asistente quedó en pausa.
+        </div>
+      )}
+
       <div ref={mensajesRef} className="flex-1 overflow-y-auto px-5 py-4">
         {error && (
           <div className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
@@ -158,17 +190,31 @@ export function ChatCotizacion({ cotizacionId, onCambio }: ChatCotizacionProps) 
           )}
           {mensajes.map((mensaje) => {
             const esCliente = mensaje.remitente === 'cliente'
+            const etiqueta =
+              mensaje.remitente === 'ia'
+                ? 'Asistente IA'
+                : mensaje.remitente === 'vendedor'
+                  ? 'Asesor de ventas'
+                  : null
             return (
               <div key={mensaje.id} className={`flex ${esCliente ? 'justify-end' : 'justify-start'}`}>
                 <div
                   className={`max-w-[80%] rounded-2xl px-4 py-2.5 ${
                     esCliente
                       ? 'rounded-br-sm bg-acento-500 text-carbono-900'
-                      : 'rounded-bl-sm border border-white/8 bg-carbono-800 text-plata-100'
+                      : mensaje.remitente === 'vendedor'
+                        ? 'rounded-bl-sm border border-acento-400/30 bg-acento-500/10 text-plata-100'
+                        : 'rounded-bl-sm border border-white/8 bg-carbono-800 text-plata-100'
                   }`}
                 >
-                  {!esCliente && (
-                    <p className="mb-1 text-xs font-semibold text-plata-400">Asistente IA</p>
+                  {etiqueta && (
+                    <p
+                      className={`mb-1 text-xs font-semibold ${
+                        mensaje.remitente === 'vendedor' ? 'text-acento-300' : 'text-plata-400'
+                      }`}
+                    >
+                      {etiqueta}
+                    </p>
                   )}
                   <p className="text-sm whitespace-pre-wrap">{mensaje.contenido}</p>
                   <p

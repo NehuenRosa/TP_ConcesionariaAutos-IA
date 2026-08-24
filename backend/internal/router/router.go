@@ -3,6 +3,7 @@ package router
 import (
 	"concesionaria/backend/internal/cifrado"
 	"concesionaria/backend/internal/config"
+	"concesionaria/backend/internal/googleid"
 	"concesionaria/backend/internal/handlers"
 	"concesionaria/backend/internal/middleware"
 	"concesionaria/backend/internal/repositories"
@@ -23,8 +24,14 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	handlerGestionVehiculos := handlers.NuevoVehiculoGestionHandler(servicioVehiculos)
 
 	repositorioUsuarios := repositories.NuevoUsuarioRepository(base)
-	servicioAutenticacion := services.NuevoAutenticacionService(repositorioUsuarios, configuracion.JWTSecreto, services.DuracionToken)
-	handlerAutenticacion := handlers.NuevoAutenticacionHandler(servicioAutenticacion)
+	// "Continuar con Google" (CU-11): habilitado solo si hay client ID.
+	googleHabilitado := configuracion.GoogleClientID != ""
+	var verificadorGoogle services.VerificadorGoogle
+	if googleHabilitado {
+		verificadorGoogle = googleid.NuevoVerificador(configuracion.GoogleClientID)
+	}
+	servicioAutenticacion := services.NuevoAutenticacionService(repositorioUsuarios, configuracion.JWTSecreto, services.DuracionToken, verificadorGoogle)
+	handlerAutenticacion := handlers.NuevoAutenticacionHandler(servicioAutenticacion, googleHabilitado, configuracion.GoogleClientID)
 	servicioUsuarios := services.NuevoUsuariosService(repositorioUsuarios)
 	handlerUsuarios := handlers.NuevoUsuariosHandler(servicioUsuarios)
 
@@ -34,14 +41,13 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioMensajes := services.NuevoMensajeService(repositorioMensajes, repositorioConsultas, servicioConsultas)
 	handlerConsultas := handlers.NuevoConsultaHandler(servicioConsultas, servicioMensajes)
 	handlerMensajes := handlers.NuevoMensajeHandler(servicioMensajes)
-	handlerNotificaciones := handlers.NuevoNotificacionHandler(servicioConsultas, servicioMensajes)
 
 	repositorioTurnos := repositories.NuevoTurnoTestDriveRepository(base)
 	servicioTurnos := services.NuevoTurnoTestDriveService(repositorioTurnos, repositorioVehiculos)
 	handlerTurnos := handlers.NuevoTurnoTestDriveHandler(servicioTurnos)
 
 	repositorioReservas := repositories.NuevoReservaRepository(base)
-	servicioReservas := services.NuevoReservaService(repositorioReservas, repositorioVehiculos)
+	servicioReservas := services.NuevoReservaService(repositorioReservas, repositorioVehiculos, configuracion.CbuConcesionaria, configuracion.AliasConcesionaria)
 	handlerReservas := handlers.NuevoReservaHandler(servicioReservas)
 
 	repositorioMetricas := repositories.NuevoMetricasRepository(base)
@@ -65,6 +71,7 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 
 	servicioCotizaciones := services.NuevoCotizacionService(repositorioCotizaciones, repositorioVehiculos, cifrador, servicioChatbot)
 	handlerCotizaciones := handlers.NuevoCotizacionHandler(servicioCotizaciones)
+	handlerNotificaciones := handlers.NuevoNotificacionHandler(servicioConsultas, servicioMensajes, servicioCotizaciones)
 
 	api := enrutador.Group("/api")
 	{
@@ -81,6 +88,8 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		{
 			autenticacion.POST("/registro", handlerAutenticacion.Registrar)
 			autenticacion.POST("/login", handlerAutenticacion.IniciarSesion)
+			autenticacion.POST("/google", handlerAutenticacion.IniciarSesionConGoogle)
+			autenticacion.GET("/proveedores", handlerAutenticacion.Proveedores)
 			autenticacion.GET("/perfil", middleware.AutenticacionJWT(configuracion.JWTSecreto), handlerAutenticacion.Perfil)
 		}
 
@@ -168,8 +177,13 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		reservas.Use(middleware.AutenticacionJWT(configuracion.JWTSecreto))
 		{
 			reservas.POST("", handlerReservas.Crear)
+			reservas.GET("/datos-transferencia", handlerReservas.DatosTransferencia)
 			reservas.GET("/mis-reservas", handlerReservas.ListarMisReservas)
 			reservas.DELETE("/:id", handlerReservas.Cancelar)
+			// El comprobante lo ve el dueño o el personal: el control fino va
+			// dentro del handler (dueño de la reserva o rol vendedor/admin).
+			reservas.POST("/:id/comprobante", handlerReservas.SubirComprobante)
+			reservas.GET("/:id/comprobante", handlerReservas.ObtenerComprobante)
 
 			gestionReservas := reservas.Group("")
 			gestionReservas.Use(middleware.ExigirRol("vendedor"))
@@ -185,9 +199,15 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 		{
 			cotizaciones.POST("", handlerCotizaciones.Crear)
 			cotizaciones.GET("/mis-cotizaciones", handlerCotizaciones.ListarMisCotizaciones)
+			// Rutas de atención personal: solo vendedores.
+			cotizaciones.GET("/bandeja", middleware.ExigirRol("vendedor"), handlerCotizaciones.ListarBandeja)
 			cotizaciones.GET("/:id", handlerCotizaciones.Obtener)
+			cotizaciones.GET("/:id/personal", middleware.ExigirRol("vendedor"), handlerCotizaciones.ObtenerPersonal)
 			cotizaciones.POST("/:id/mensajes", handlerCotizaciones.EnviarMensaje)
+			cotizaciones.PUT("/:id/tomar", middleware.ExigirRol("vendedor"), handlerCotizaciones.Tomar)
+			cotizaciones.POST("/:id/mensajes-vendedor", middleware.ExigirRol("vendedor"), handlerCotizaciones.ResponderComoVendedor)
 			cotizaciones.PUT("/:id/cerrar", handlerCotizaciones.Cerrar)
+			cotizaciones.PUT("/:id/cerrar-personal", middleware.ExigirRol("vendedor"), handlerCotizaciones.CerrarPersonal)
 		}
 	}
 

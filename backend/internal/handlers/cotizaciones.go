@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"concesionaria/backend/internal/models"
 	"concesionaria/backend/internal/services"
@@ -15,6 +17,9 @@ import (
 type CotizacionResumen struct {
 	ID            uint            `json:"id"`
 	Vehiculo      VehiculoResumen `json:"vehiculo"`
+	Cliente       *UsuarioResumen `json:"cliente,omitempty"`
+	Vendedor      *UsuarioResumen `json:"vendedor,omitempty"`
+	FechaToma     string          `json:"fechaToma,omitempty"`
 	Estado        string          `json:"estado"`
 	UltimoMensaje *MensajeResumen `json:"ultimoMensaje,omitempty"`
 	CreatedAt     string          `json:"createdAt"`
@@ -31,12 +36,15 @@ type MensajeCotizacionResumen struct {
 
 // CotizacionDetalle es la ficha completa de una cotización con sus mensajes.
 type CotizacionDetalle struct {
-	ID        uint                       `json:"id"`
-	Vehiculo  VehiculoResumen            `json:"vehiculo"`
-	Estado    string                     `json:"estado"`
-	Mensajes  []MensajeCotizacionResumen `json:"mensajes"`
-	CreatedAt string                     `json:"createdAt"`
-	UpdatedAt string                     `json:"updatedAt"`
+	ID       uint                       `json:"id"`
+	Vehiculo VehiculoResumen            `json:"vehiculo"`
+	Cliente  *UsuarioResumen            `json:"cliente,omitempty"`
+	Vendedor *UsuarioResumen            `json:"vendedor,omitempty"`
+	FechaToma string                     `json:"fechaToma,omitempty"`
+	Estado   string                     `json:"estado"`
+	Mensajes []MensajeCotizacionResumen `json:"mensajes"`
+	CreatedAt string                    `json:"createdAt"`
+	UpdatedAt string                    `json:"updatedAt"`
 }
 
 // CotizacionHandler agrupa los handlers del panel de cotizaciones del cliente.
@@ -136,6 +144,12 @@ func (h *CotizacionHandler) Obtener(c *gin.Context) {
 		return
 	}
 
+	// Abrir el hilo marca como leídos los mensajes de ia/vendedor para el
+	// cliente (best-effort).
+	if err := h.servicio.MarcarLeidas(c.Request.Context(), clienteID, uint(cotizacionID), services.LadoCliente); err != nil {
+		slog.Warn("no se pudieron marcar como leídos los mensajes de la cotización", "error", err)
+	}
+
 	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
 }
 
@@ -218,12 +232,170 @@ func (h *CotizacionHandler) Cerrar(c *gin.Context) {
 	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
 }
 
+// ListarBandeja lista todas las cotizaciones para el personal con su último
+// mensaje descifrado.
+func (h *CotizacionHandler) ListarBandeja(c *gin.Context) {
+	cotizaciones, err := h.servicio.ListarBandeja(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener las cotizaciones"})
+		return
+	}
+
+	resumenes := make([]CotizacionResumen, 0, len(cotizaciones))
+	for _, cotizacion := range cotizaciones {
+		resumenes = append(resumenes, aCotizacionResumen(&cotizacion))
+	}
+
+	c.JSON(http.StatusOK, resumenes)
+}
+
+// ObtenerPersonal responde el detalle de cualquier cotización con sus mensajes
+// descifrados, para la vista de atención del vendedor.
+func (h *CotizacionHandler) ObtenerPersonal(c *gin.Context) {
+	usuarioID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	cotizacion, err := h.servicio.ObtenerPersonal(c.Request.Context(), uint(cotizacionID))
+	if err != nil {
+		if errors.Is(err, services.ErrCotizacionNoEncontrada) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo obtener la cotización"})
+		return
+	}
+
+	// Si el solicitante es el vendedor asignado, abrir el hilo marca como
+	// leídos los mensajes del cliente (best-effort).
+	if err := h.servicio.MarcarLeidas(c.Request.Context(), usuarioID, uint(cotizacionID), services.LadoPersonal); err != nil {
+		slog.Warn("no se pudieron marcar como leídos los mensajes de la cotización", "error", err)
+	}
+
+	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
+}
+
+// Tomar asigna la cotización al vendedor autenticado y silencia la IA.
+func (h *CotizacionHandler) Tomar(c *gin.Context) {
+	vendedorID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	cotizacion, err := h.servicio.Tomar(c.Request.Context(), vendedorID, uint(cotizacionID))
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrCotizacionNoEncontrada):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionYaAtendida):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionYaCerrada):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo tomar la cotización"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
+}
+
+// peticionMensajeVendedor es el cuerpo de POST /api/cotizaciones/:id/mensajes-vendedor.
+type peticionMensajeVendedor struct {
+	Mensaje string `json:"mensaje"`
+}
+
+// ResponderComoVendedor guarda el mensaje del vendedor sin pasar por la IA y
+// devuelve el detalle actualizado de la conversación.
+func (h *CotizacionHandler) ResponderComoVendedor(c *gin.Context) {
+	vendedorID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	var peticion peticionMensajeVendedor
+	if err := c.ShouldBindJSON(&peticion); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Solicitud inválida"})
+		return
+	}
+
+	cotizacion, err := h.servicio.ResponderComoVendedor(c.Request.Context(), vendedorID, uint(cotizacionID), peticion.Mensaje)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrCotizacionNoEncontrada):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionYaAtendida):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionNoTomada),
+			errors.Is(err, services.ErrMensajeVacio),
+			errors.Is(err, services.ErrMensajeMuyLargo):
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionYaCerrada):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo enviar el mensaje"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
+}
+
+// CerrarPersonal cierra una cotización abierta desde la bandeja del personal.
+func (h *CotizacionHandler) CerrarPersonal(c *gin.Context) {
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	cotizacion, err := h.servicio.CerrarPersonal(c.Request.Context(), uint(cotizacionID))
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrCotizacionNoEncontrada):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionYaCerrada):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo cerrar la cotización"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
+}
+
 // aCotizacionResumen convierte un modelo en el resumen para el listado. El
 // último mensaje llega ya descifrado del servicio.
 func aCotizacionResumen(cotizacion *models.Cotizacion) CotizacionResumen {
 	resumen := CotizacionResumen{
 		ID:        cotizacion.ID,
 		Vehiculo:  aResumen(cotizacion.Vehiculo),
+		Cliente:   aUsuarioResumenOpcional(cotizacion.ClienteID, cotizacion.Cliente.Nombre),
+		Vendedor:  aUsuarioResumenVendedor(cotizacion.Vendedor),
+		FechaToma: aFechaOpcional(cotizacion.FechaToma),
 		Estado:    cotizacion.Estado,
 		CreatedAt: cotizacion.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt: cotizacion.UpdatedAt.Format("2006-01-02T15:04:05Z"),
@@ -254,9 +426,36 @@ func aCotizacionDetalle(cotizacion *models.Cotizacion) CotizacionDetalle {
 	return CotizacionDetalle{
 		ID:        cotizacion.ID,
 		Vehiculo:  aResumen(cotizacion.Vehiculo),
+		Cliente:   aUsuarioResumenOpcional(cotizacion.ClienteID, cotizacion.Cliente.Nombre),
+		Vendedor:  aUsuarioResumenVendedor(cotizacion.Vendedor),
+		FechaToma: aFechaOpcional(cotizacion.FechaToma),
 		Estado:    cotizacion.Estado,
 		Mensajes:  mensajes,
 		CreatedAt: cotizacion.CreatedAt.Format("2006-01-02T15:04:05Z"),
 		UpdatedAt: cotizacion.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
+}
+
+// aUsuarioResumenOpcional arma la ficha básica del cliente cuando hay datos.
+func aUsuarioResumenOpcional(id uint, nombre string) *UsuarioResumen {
+	if id == 0 && nombre == "" {
+		return nil
+	}
+	return &UsuarioResumen{ID: id, Nombre: nombre}
+}
+
+// aUsuarioResumenVendedor arma la ficha básica del vendedor asignado.
+func aUsuarioResumenVendedor(vendedor *models.Usuario) *UsuarioResumen {
+	if vendedor == nil || vendedor.ID == 0 {
+		return nil
+	}
+	return &UsuarioResumen{ID: vendedor.ID, Nombre: vendedor.Nombre}
+}
+
+// aFechaOpcional formatea la fecha de toma si la cotización fue tomada.
+func aFechaOpcional(fecha *time.Time) string {
+	if fecha == nil {
+		return ""
+	}
+	return fecha.Format("2006-01-02T15:04:05Z")
 }

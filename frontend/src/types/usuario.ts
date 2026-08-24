@@ -23,6 +23,15 @@ export interface RespuestaLogin {
   usuario: Usuario
 }
 
+export interface DatosLoginGoogle {
+  credencial: string
+}
+
+export interface ProveedoresAuth {
+  google: boolean
+  client_id?: string
+}
+
 export interface DatosUsuarioAdmin {
   nombre: string
   email: string

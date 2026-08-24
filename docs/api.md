@@ -142,9 +142,17 @@ Cuerpo:
 }
 ```
 
-`200` `{"respuesta": "..."}`. `400` si el mensaje está vacío o es muy largo.
+`200` `{"respuesta": "...", "cotizacionId": null, "vehiculosMencionados": [3, 7]}`.
+`400` si el mensaje está vacío o es muy largo.
 Si el proveedor LLM está caído, responde `200` con un mensaje en español que
 orienta al usuario (el error interno se loguea).
+
+- `cotizacionId`: id de la cotización creada cuando el usuario pidió cotizar y
+  está autenticado (si no, `null`).
+- `vehiculosMencionados`: ids de vehículos del stock que la IA mencionó con el
+  marcador interno `[VEHICULO:<id>]`, ya validados contra el contexto servido
+  (máx. 5). El frontend los muestra como chips "Ver ficha" que llevan a
+  `/catalogo/:id`; los marcadores nunca llegan al texto visible.
 
 ### `POST /chatbot/tasacion`
 
@@ -322,10 +330,15 @@ Marca todos los mensajes de la consulta como leídos.
 
 ### `GET /notificaciones/contador`
 
-Cantidad total de mensajes no leídos del usuario autenticado.
+Cantidad de mensajes no leídos del usuario autenticado, desglosada por canal:
+`consultas` (bandeja clásica) y `cotizaciones` (cotizaciones iniciadas con la
+IA, CU-12). Para el cliente cuentan las respuestas de vendedor; para el
+vendedor, mensajes de cliente en cotizaciones abiertas sin asignar o asignadas
+a él. Los mensajes de la IA no notifican (llegan en la misma respuesta del
+chat). Abrir el hilo correspondiente marca sus mensajes como leídos.
 
 ```json
-{ "contador": 3 }
+{ "contador": 3, "consultas": 1, "cotizaciones": 2 }
 ```
 
 ## Test drives (cliente + vendedor)
@@ -378,6 +391,20 @@ Estados de reserva: `activa`, `vendida`, `cancelada`. Mientras una reserva está
 `activa`, el vehículo pasa a estado `reservado` y deja de mostrarse en el
 catálogo público.
 
+**Seña (CU-08)**: al reservar, el backend fija un plazo de **2 horas** para que
+el cliente transfiera el **5 % del precio** del vehículo y suba la imagen del
+comprobante. Vencido el plazo sin comprobante, la reserva se anula sola
+(`cancelada`) y la unidad vuelve a `disponible`; lo aplica un job interno cada
+30 s más chequeos perezosos al operar sobre la reserva. Las respuestas de
+reserva incluyen `montoSenia` (calculado por el backend), `vencimientoComprobante`
+y `comprobanteEnviadoAt`.
+
+### `GET /reservas/datos-transferencia?vehiculoId=`
+
+CBU/alias de la concesionaria (variables `CBU_CONCESIONARIA` /
+`ALIAS_CONCESIONARIA`) y monto de la seña del vehículo indicado, solo si está
+disponible. `404` si no existe o no está disponible.
+
 ### `POST /reservas`
 
 El cliente reserva una unidad.
@@ -386,8 +413,20 @@ El cliente reserva una unidad.
 { "vehiculoId": 1 }
 ```
 
-`201` con el resumen de la reserva. `404` vehículo no disponible, `409` el
-vehículo ya tiene una reserva activa.
+`201` con el resumen de la reserva (incluye monto de seña y vencimiento). `404`
+vehículo no disponible, `409` el vehículo ya tiene una reserva activa.
+
+### `POST /reservas/:id/comprobante`
+
+El dueño sube la imagen del comprobante (multipart, campo `comprobante`;
+JPG/PNG/WebP ≤ 5 MB) mientras la reserva esté activa y dentro del plazo; puede
+reenviarse (reemplaza la anterior). `400` archivo inválido, `404` reserva ajena
+o inexistente, `409` reserva no activa o plazo vencido.
+
+### `GET /reservas/:id/comprobante`
+
+Sirve la imagen del comprobante al dueño de la reserva o a
+vendedores/administradores (`403` a otros clientes, `404` si nunca se envió).
 
 ### `GET /reservas/mis-reservas`
 
@@ -403,11 +442,45 @@ Confirma la venta: la reserva pasa a `vendida` y el vehículo a `vendido`.
 
 ### `PUT /reservas/:id/cancelar` *(vendedor)*
 
-Cancela la reserva y libera la unidad (el vehículo vuelve a `disponible`).
+Cancela la reserva y libera la unidad (el vehículo vuelve a `disponible`). El
+motivo es **obligatorio** y queda visible para el cliente.
+
+Cuerpo:
+
+```json
+{ "motivo": "El comprobante no corresponde a la seña solicitada." }
+```
+
+`400` si el motivo está vacío (menos de 5 caracteres tras recortar espacios),
+`404` si la reserva no existe y `409` si ya no está activa. El cliente lo ve en
+Mis Reservas como `motivoCancelacion`.
 
 ### `DELETE /reservas/:id`
 
 El cliente cancela su propia reserva (libera la unidad).
+
+## Cotizaciones con IA (cliente + vendedor)
+
+Las cotizaciones son conversaciones del cliente con el asistente sobre precios y
+financiación de un vehículo; los mensajes se guardan cifrados. Endpoints del
+cliente: `POST /cotizaciones`, `GET /cotizaciones/mis-cotizaciones`,
+`GET /cotizaciones/:id`, `POST /cotizaciones/:id/mensajes`,
+`PUT /cotizaciones/:id/cerrar`.
+
+Un **vendedor** puede tomar una conversación para atenderla personalmente:
+desde ese momento la IA queda silenciada (los mensajes del cliente se guardan
+sin respuesta automática) y solo el vendedor que la tomó puede responder.
+
+| Endpoint | Descripción |
+|----------|-------------|
+| `GET /cotizaciones/bandeja` *(vendedor)* | Todas las cotizaciones ordenadas por actividad, con cliente, vendedor asignado, estado y último mensaje descifrado. |
+| `GET /cotizaciones/:id/personal` *(vendedor)* | Detalle completo con el hilo descifrado. |
+| `PUT /cotizaciones/:id/tomar` *(vendedor)* | Asigna la conversación al vendedor autenticado y silencia la IA. Idempotente para el mismo vendedor; `409` si otro vendedor la tomó o está cerrada. |
+| `POST /cotizaciones/:id/mensajes-vendedor` *(vendedor)* | Guarda el mensaje del vendedor (remitente `vendedor`) sin pasar por la IA. `400` sin haberla tomado o mensaje vacío/muy largo; `403` si la tomó otro vendedor; `409` si está cerrada. |
+| `PUT /cotizaciones/:id/cerrar-personal` *(vendedor)* | Cierra la cotización desde el personal. |
+
+El cliente ve en su panel quién lo atiende (`vendedor`) y los mensajes del
+personal con remitente `vendedor`; ambos lados refrescan cada 10 s.
 
 ## Roles en los endpoints
 
@@ -423,8 +496,11 @@ El cliente cancela su propia reserva (libera la unidad).
 | `/consultas/bandeja`, `/consultas/:id/tomar\|cerrar\|DELETE` | | | ✔ | |
 | `/test-drives` (POST, mis-turnos, DELETE) | | ✔ | ✔* | |
 | `/test-drives` (gestión: listar, confirmar, cancelar, completar) | | | ✔ | |
-| `/reservas` (POST, mis-reservas, DELETE) | | ✔ | ✔* | |
+| `/reservas` (POST, mis-reservas, DELETE, comprobante propio) | | ✔ | ✔* | |
 | `/reservas` (gestión: listar, confirmar, cancelar) | | | ✔ | |
+| `/reservas/:id/comprobante` (GET) | | ✔* | ✔ | ✔ |
+| `/cotizaciones` (cliente: crear, mis-cotizaciones, hilo propio, cerrar) | | ✔ | ✔* | |
+| `/cotizaciones/bandeja`, `/:id/personal`, `/:id/tomar`, `/:id/mensajes-vendedor`, `/:id/cerrar-personal` | | | ✔ | |
 | `/admin/vehiculos*` | | | | ✔ |
 | `/admin/usuarios*` | | | | ✔ |
 | `/admin/metricas*` | | | | ✔ |

@@ -24,12 +24,16 @@ const generarSesionId = (): string => {
 
 type FotoConUrl = { archivo: File; url: string }
 
+// MensajeChat extiende un turno del chat con los vehículos que la IA mencionó
+// (solo en respuestas del asistente), para mostrar enlaces a sus fichas.
+type MensajeChat = TurnoChat & { vehiculos?: number[] }
+
 export function Chatbot() {
   const navigate = useNavigate()
   const [abierto, setAbierto] = useState(false)
   const [modo, setModo] = useState<'chat' | 'tasacion'>('chat')
-  const [mensajesConsulta, setMensajesConsulta] = useState<TurnoChat[]>([])
-  const [mensajesTasacion, setMensajesTasacion] = useState<TurnoChat[]>([])
+  const [mensajesConsulta, setMensajesConsulta] = useState<MensajeChat[]>([])
+  const [mensajesTasacion, setMensajesTasacion] = useState<MensajeChat[]>([])
   const [entrada, setEntrada] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +105,10 @@ export function Chatbot() {
         contenido: turno.contenido,
       }))
       const respuesta = await api.enviarMensajeChatbot({ mensaje, historial })
-      setMensajesConsulta((m) => [...m, { rol: 'asistente', contenido: respuesta.respuesta }])
+      setMensajesConsulta((m) => [
+        ...m,
+        { rol: 'asistente', contenido: respuesta.respuesta, vehiculos: respuesta.vehiculosMencionados },
+      ])
       // Cuando la IA creó una cotización, se redirige al panel para seguir la
       // conversación sobre ese vehículo.
       if (respuesta.cotizacionId) {
@@ -311,6 +318,24 @@ export function Chatbot() {
                   }`}
                 >
                   {turno.contenido}
+                  {turno.rol === 'asistente' && turno.vehiculos && turno.vehiculos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {turno.vehiculos.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => navigate(`/catalogo/${id}`)}
+                          className="flex items-center gap-1 rounded-full border border-acento-400/40 bg-acento-500/10 px-2.5 py-1 text-xs font-medium text-acento-300 transition-colors hover:bg-acento-500/25"
+                          aria-label={`Ver la ficha del vehículo mencionado`}
+                        >
+                          Ver ficha
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3 w-3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12h15m0 0l-6-6m6 6l-6 6" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

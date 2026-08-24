@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"concesionaria/backend/internal/models"
 	"concesionaria/backend/internal/services"
@@ -24,6 +25,12 @@ type EntradaLogin struct {
 	Password string `json:"password"`
 }
 
+// EntradaGoogle es el cuerpo de la solicitud de inicio de sesión con Google:
+// el credential (ID token) emitido por Google Identity Services.
+type EntradaGoogle struct {
+	Credencial string `json:"credencial"`
+}
+
 // RespuestaLogin envuelve el token y el perfil del usuario autenticado.
 type RespuestaLogin struct {
 	Token   string         `json:"token"`
@@ -32,12 +39,16 @@ type RespuestaLogin struct {
 
 // AutenticacionHandler agrupa los handlers de autenticación y usuarios.
 type AutenticacionHandler struct {
-	servicio services.AutenticacionService
+	servicio         services.AutenticacionService
+	googleHabilitado bool
+	clienteIDGoogle  string
 }
 
-// NuevoAutenticacionHandler crea un handler de autenticación.
-func NuevoAutenticacionHandler(servicio services.AutenticacionService) *AutenticacionHandler {
-	return &AutenticacionHandler{servicio: servicio}
+// NuevoAutenticacionHandler crea un handler de autenticación. El client ID de
+// Google se expone en /auth/proveedores para que el frontend inicialice
+// Google Identity Services.
+func NuevoAutenticacionHandler(servicio services.AutenticacionService, googleHabilitado bool, clienteIDGoogle string) *AutenticacionHandler {
+	return &AutenticacionHandler{servicio: servicio, googleHabilitado: googleHabilitado, clienteIDGoogle: clienteIDGoogle}
 }
 
 // Registrar crea una cuenta nueva con rol cliente.
@@ -91,6 +102,41 @@ func (h *AutenticacionHandler) IniciarSesion(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, RespuestaLogin{Token: tokenString, Usuario: usuario})
+}
+
+// IniciarSesionConGoogle valida el credential de Google y responde con el
+// token JWT propio del sistema.
+func (h *AutenticacionHandler) IniciarSesionConGoogle(c *gin.Context) {
+	var entrada EntradaGoogle
+	if err := c.ShouldBindJSON(&entrada); err != nil || strings.TrimSpace(entrada.Credencial) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Falta la credencial de Google"})
+		return
+	}
+
+	usuario, tokenString, err := h.servicio.IniciarSesionConGoogle(c.Request.Context(), entrada.Credencial)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrGoogleNoDisponible):
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "El inicio de sesión con Google no está disponible"})
+		case errors.Is(err, services.ErrCredencialGoogleInvalida):
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "La credencial de Google no es válida o está vencida"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo iniciar sesión con Google"})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, RespuestaLogin{Token: tokenString, Usuario: usuario})
+}
+
+// Proveedores informa qué métodos de inicio de sesión están habilitados.
+func (h *AutenticacionHandler) Proveedores(c *gin.Context) {
+	respuesta := gin.H{"google": false}
+	if h.googleHabilitado && h.servicio.GoogleHabilitado() {
+		respuesta["google"] = true
+		respuesta["client_id"] = h.clienteIDGoogle
+	}
+	c.JSON(http.StatusOK, respuesta)
 }
 
 // Perfil responde el usuario autenticado a partir del token del request.

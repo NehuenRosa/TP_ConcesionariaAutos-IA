@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { ErrorApi } from '../services/api'
+import { BotonGoogle } from '../components/BotonGoogle'
 import { Boton } from '../components/ui/Boton'
 import { CampoTexto } from '../components/ui/Campo'
 import { MensajeError } from '../components/ui/MensajeError'
@@ -41,6 +42,14 @@ export function Registro() {
 
       <div className="mt-8 space-y-4">
         {error && <MensajeError>{error}</MensajeError>}
+
+        <BotonGoogle alCompletar={() => navigate('/')} />
+
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-white/10" />
+          <span className="text-xs uppercase tracking-widest text-plata-500">o registrate con tu email</span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
 
         <form
           onSubmit={enviar}

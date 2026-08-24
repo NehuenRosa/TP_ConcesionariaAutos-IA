@@ -135,6 +135,9 @@ Ver `.env.example`. Las principales:
 | `MODELO_CHATBOT` | Modelo de chat / comparación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `llama3` |
 | `MODELO_VISION` | Modelo de visión para la tasación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `minicpm-v` |
 | `ARGAUTOS_URL` | API de valores de la Guía de la CCA (tasación) | `https://argautos.com/api/v1` |
+| `GOOGLE_CLIENT_ID` | Client ID OAuth de Google para "Continuar con Google" (CU-11); vacío = deshabilitado | *(vacío)* |
+| `CBU_CONCESIONARIA` | CBU mostrado al cliente para transferir la seña de la reserva (CU-08); vacío = la UI avisa que el personal pasa los datos | *(vacío)* |
+| `ALIAS_CONCESIONARIA` | Alias CBU para la transferencia de la seña (CU-08) | *(vacío)* |
 | `VITE_API_URL` | URL base de la API (frontend) | `http://localhost:8080/api` |
 
 > En producción, cambiar siempre `JWT_SECRETO` y no exponer `GOOGLE_API_KEY` en

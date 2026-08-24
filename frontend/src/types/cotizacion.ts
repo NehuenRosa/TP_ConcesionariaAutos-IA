@@ -1,6 +1,6 @@
 export type EstadoCotizacion = 'abierta' | 'cerrada'
 
-export type RemitenteCotizacion = 'cliente' | 'ia'
+export type RemitenteCotizacion = 'cliente' | 'ia' | 'vendedor'
 
 export interface VehiculoCotizado {
   id: number
@@ -20,9 +20,17 @@ export interface MensajeCotizacion {
   createdAt: string
 }
 
+export interface UsuarioResumenCotizacion {
+  id: number
+  nombre: string
+}
+
 export interface CotizacionResumen {
   id: number
   vehiculo: VehiculoCotizado
+  cliente?: UsuarioResumenCotizacion
+  vendedor?: UsuarioResumenCotizacion
+  fechaToma?: string
   estado: EstadoCotizacion
   ultimoMensaje?: {
     contenido: string
@@ -35,6 +43,9 @@ export interface CotizacionResumen {
 export interface Cotizacion {
   id: number
   vehiculo: VehiculoCotizado
+  cliente?: UsuarioResumenCotizacion
+  vendedor?: UsuarioResumenCotizacion
+  fechaToma?: string
   estado: EstadoCotizacion
   mensajes: MensajeCotizacion[]
   createdAt: string

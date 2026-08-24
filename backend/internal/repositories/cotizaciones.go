@@ -20,8 +20,24 @@ type CotizacionRepository interface {
 	// ListarPorCliente devuelve las cotizaciones de un cliente, ordenadas por
 	// fecha de actualización descendente, con su vehículo y último mensaje.
 	ListarPorCliente(ctx context.Context, clienteID uint) ([]models.Cotizacion, error)
+	// ListarBandeja devuelve todas las cotizaciones para el personal, ordenadas
+	// por fecha de actualización descendente, con vehículo, cliente, vendedor y
+	// último mensaje.
+	ListarBandeja(ctx context.Context) ([]models.Cotizacion, error)
 	// Actualizar guarda los cambios de la cotización (por ejemplo, su estado).
 	Actualizar(ctx context.Context, cotizacion *models.Cotizacion) error
+	// ContarNoLeidosDeCliente cuenta los mensajes de vendedor sin leer en las
+	// cotizaciones del cliente indicado.
+	ContarNoLeidosDeCliente(ctx context.Context, clienteID uint) (int64, error)
+	// ContarNoLeidosParaPersonal cuenta los mensajes de cliente sin leer en
+	// cotizaciones abiertas sin asignar o asignadas al vendedor indicado.
+	ContarNoLeidosParaPersonal(ctx context.Context, vendedorID uint) (int64, error)
+	// MarcarLeidasParaCliente marca como leídos (lado cliente) los mensajes de
+	// ia/vendedor de una cotización.
+	MarcarLeidasParaCliente(ctx context.Context, cotizacionID uint) error
+	// MarcarLeidasParaPersonal marca como leídos (lado personal) los mensajes
+	// de cliente de una cotización.
+	MarcarLeidasParaPersonal(ctx context.Context, cotizacionID uint) error
 }
 
 // cotizacionRepository implementa CotizacionRepository sobre GORM.
@@ -70,12 +86,14 @@ func (r *cotizacionRepository) AgregarMensaje(ctx context.Context, mensaje *mode
 	return nil
 }
 
-// ObtenerPorID devuelve la cotización con su vehículo, cliente y mensajes.
+// ObtenerPorID devuelve la cotización con su vehículo, cliente, vendedor y
+// mensajes.
 func (r *cotizacionRepository) ObtenerPorID(ctx context.Context, id uint) (*models.Cotizacion, error) {
 	var cotizacion models.Cotizacion
 	err := r.base.WithContext(ctx).
 		Preload("Vehiculo").
 		Preload("Cliente").
+		Preload("Vendedor").
 		Preload("Mensajes", func(db *gorm.DB) *gorm.DB {
 			return db.Order("created_at ASC")
 		}).
@@ -104,12 +122,102 @@ func (r *cotizacionRepository) ListarPorCliente(ctx context.Context, clienteID u
 	return cotizaciones, nil
 }
 
-// Actualizar guarda los cambios de la cotización.
+// ListarBandeja devuelve todas las cotizaciones para el personal, ordenadas
+// por fecha de actualización descendente, con vehículo, cliente, vendedor y
+// último mensaje.
+func (r *cotizacionRepository) ListarBandeja(ctx context.Context) ([]models.Cotizacion, error) {
+	var cotizaciones []models.Cotizacion
+	err := r.base.WithContext(ctx).
+		Preload("Vehiculo").
+		Preload("Cliente").
+		Preload("Vendedor").
+		Preload("Mensajes", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at DESC").Limit(1)
+		}).
+		Order("updated_at DESC").
+		Find(&cotizaciones).Error
+	if err != nil {
+		return nil, fmt.Errorf("listar bandeja de cotizaciones: %w", err)
+	}
+	return cotizaciones, nil
+}
+
+// Actualizar guarda los cambios de la cotización: su estado y, si corresponde,
+// el vendedor que la tomó con la fecha de toma.
 func (r *cotizacionRepository) Actualizar(ctx context.Context, cotizacion *models.Cotizacion) error {
 	if err := r.base.WithContext(ctx).
 		Model(cotizacion).
-		Updates(map[string]interface{}{"estado": cotizacion.Estado}).Error; err != nil {
+		Updates(map[string]interface{}{
+			"estado":      cotizacion.Estado,
+			"vendedor_id": cotizacion.VendedorID,
+			"fecha_toma":  cotizacion.FechaToma,
+		}).Error; err != nil {
 		return fmt.Errorf("actualizar cotización: %w", err)
+	}
+	return nil
+}
+
+// ContarNoLeidosDeCliente cuenta los mensajes de vendedor sin leer en las
+// cotizaciones del cliente. Los mensajes de la IA no cuentan: su respuesta
+// llega sincrónica en el mismo request.
+func (r *cotizacionRepository) ContarNoLeidosDeCliente(ctx context.Context, clienteID uint) (int64, error) {
+	var total int64
+	err := r.base.WithContext(ctx).
+		Model(&models.MensajeCotizacion{}).
+		Joins("JOIN cotizaciones ON cotizaciones.id = cotizacion_mensajes.cotizacion_id").
+		Where(
+			"cotizaciones.cliente_id = ? AND cotizacion_mensajes.remitente = ? AND cotizacion_mensajes.leido_por_cliente = ?",
+			clienteID, models.RemitenteVendedor, false,
+		).
+		Count(&total).Error
+	if err != nil {
+		return 0, fmt.Errorf("contar mensajes no leídos del cliente: %w", err)
+	}
+	return total, nil
+}
+
+// ContarNoLeidosParaPersonal cuenta los mensajes de cliente sin leer en
+// cotizaciones abiertas sin asignar o asignadas al vendedor indicado. Las
+// cerradas y las atendidas por otro vendedor no cuentan.
+func (r *cotizacionRepository) ContarNoLeidosParaPersonal(ctx context.Context, vendedorID uint) (int64, error) {
+	var total int64
+	err := r.base.WithContext(ctx).
+		Model(&models.MensajeCotizacion{}).
+		Joins("JOIN cotizaciones ON cotizaciones.id = cotizacion_mensajes.cotizacion_id").
+		Where(
+			"cotizaciones.estado = ? AND (cotizaciones.vendedor_id IS NULL OR cotizaciones.vendedor_id = ?)"+
+				" AND cotizacion_mensajes.remitente = ? AND cotizacion_mensajes.leido_por_vendedor = ?",
+			models.EstadoCotizacionAbierta, vendedorID, models.RemitenteCliente, false,
+		).
+		Count(&total).Error
+	if err != nil {
+		return 0, fmt.Errorf("contar mensajes no leídos para el personal: %w", err)
+	}
+	return total, nil
+}
+
+// MarcarLeidasParaCliente marca como leídos (lado cliente) los mensajes de
+// ia/vendedor de la cotización indicada.
+func (r *cotizacionRepository) MarcarLeidasParaCliente(ctx context.Context, cotizacionID uint) error {
+	err := r.base.WithContext(ctx).
+		Model(&models.MensajeCotizacion{}).
+		Where("cotizacion_id = ? AND remitente <> ? AND leido_por_cliente = ?", cotizacionID, models.RemitenteCliente, false).
+		Update("leido_por_cliente", true).Error
+	if err != nil {
+		return fmt.Errorf("marcar leídos para el cliente: %w", err)
+	}
+	return nil
+}
+
+// MarcarLeidasParaPersonal marca como leídos (lado personal) los mensajes de
+// cliente de la cotización indicada.
+func (r *cotizacionRepository) MarcarLeidasParaPersonal(ctx context.Context, cotizacionID uint) error {
+	err := r.base.WithContext(ctx).
+		Model(&models.MensajeCotizacion{}).
+		Where("cotizacion_id = ? AND remitente = ? AND leido_por_vendedor = ?", cotizacionID, models.RemitenteCliente, false).
+		Update("leido_por_vendedor", true).Error
+	if err != nil {
+		return fmt.Errorf("marcar leídos para el personal: %w", err)
 	}
 	return nil
 }

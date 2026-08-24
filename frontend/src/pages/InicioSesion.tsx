@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { ErrorApi } from '../services/api'
+import { BotonGoogle } from '../components/BotonGoogle'
 import { Boton } from '../components/ui/Boton'
 import { CampoTexto } from '../components/ui/Campo'
 import { MensajeError } from '../components/ui/MensajeError'
@@ -15,6 +16,12 @@ export function InicioSesion() {
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  function destinoTrasIngreso(): string {
+    const desde = (ubicacion.state as { desde?: { pathname?: string; search?: string; hash?: string } } | null)?.desde
+    const destino = desde ? `${desde.pathname ?? ''}${desde.search ?? ''}${desde.hash ?? ''}` : '/'
+    return destino || '/'
+  }
+
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
     setEnviando(true)
@@ -22,9 +29,7 @@ export function InicioSesion() {
 
     try {
       await iniciarSesion({ email, password })
-      const desde = (ubicacion.state as { desde?: { pathname?: string; search?: string; hash?: string } } | null)?.desde
-      const destino = desde ? `${desde.pathname ?? ''}${desde.search ?? ''}${desde.hash ?? ''}` : '/'
-      navigate(destino || '/')
+      navigate(destinoTrasIngreso())
     } catch (e: unknown) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo iniciar sesión.')
       setEnviando(false)
@@ -43,6 +48,14 @@ export function InicioSesion() {
 
       <div className="mt-8 space-y-4">
         {error && <MensajeError>{error}</MensajeError>}
+
+        <BotonGoogle alCompletar={() => navigate(destinoTrasIngreso())} />
+
+        <div className="flex items-center gap-3">
+          <span className="h-px flex-1 bg-white/10" />
+          <span className="text-xs uppercase tracking-widest text-plata-500">o continuá con tu email</span>
+          <span className="h-px flex-1 bg-white/10" />
+        </div>
 
         <form
           onSubmit={enviar}

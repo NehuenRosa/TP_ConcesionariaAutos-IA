@@ -6,6 +6,7 @@ import { CampoSeleccion } from '../components/ui/Campo'
 import { ContenidoCargando } from '../components/ui/Spinner'
 import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
 import { EstadoVacio } from '../components/ui/EstadoVacio'
+import { formatearPrecio } from '../utils/formato'
 import {
   estilosEstadoReserva,
   etiquetasEstadoReserva,
@@ -27,12 +28,33 @@ function formatearFecha(fecha: string): string {
   })
 }
 
+function formatearHora(fecha: string): string {
+  return new Date(fecha).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
 export function GestionReservas() {
   const [reservas, setReservas] = useState<Reserva[]>([])
   const [filtro, setFiltro] = useState<EstadoReserva | ''>('')
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [accionId, setAccionId] = useState<number | null>(null)
+  // Reserva en proceso de cancelación con su motivo obligatorio.
+  const [cancelandoId, setCancelandoId] = useState<number | null>(null)
+  const [motivo, setMotivo] = useState('')
+  const [errorMotivo, setErrorMotivo] = useState<string | null>(null)
+
+  // verComprobante descarga la imagen con el token y la abre en una pestaña.
+  const verComprobante = async (id: number) => {
+    setError(null)
+    try {
+      const imagen = await api.obtenerComprobanteReserva(id)
+      const url = URL.createObjectURL(imagen)
+      window.open(url, '_blank', 'noopener')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (e: unknown) {
+      setError(e instanceof ErrorApi ? e.message : 'No se pudo abrir el comprobante')
+    }
+  }
 
   const cargarReservas = useCallback(
     async (filtroSolicitado: EstadoReserva | '' = filtro) => {
@@ -58,20 +80,34 @@ export function GestionReservas() {
   }, [cargarReservas, filtro])
 
   const ejecutarAccion = async (reserva: Reserva, accion: 'confirmar' | 'cancelar') => {
-    if (accion === 'cancelar' && !window.confirm(`¿Cancelar la reserva de ${reserva.cliente.nombre}?`)) {
+    if (accion === 'confirmar') {
+      setAccionId(reserva.id)
+      try {
+        await api.confirmarReservaVenta(reserva.id)
+        await cargarReservas()
+      } catch (e: unknown) {
+        setError(e instanceof ErrorApi ? e.message : 'No se pudo actualizar la reserva')
+      } finally {
+        setAccionId(null)
+      }
       return
     }
 
+    // Cancelación: exige el motivo que va a leer el cliente.
+    const texto = motivo.trim()
+    if (texto.length < 5) {
+      setErrorMotivo('Explicá brevemente por qué se cancela la reserva (mínimo 5 caracteres)')
+      return
+    }
+    setErrorMotivo(null)
     setAccionId(reserva.id)
     try {
-      if (accion === 'confirmar') {
-        await api.confirmarReservaVenta(reserva.id)
-      } else {
-        await api.cancelarReservaVendedor(reserva.id)
-      }
+      await api.cancelarReservaVendedor(reserva.id, texto)
+      setCancelandoId(null)
+      setMotivo('')
       await cargarReservas()
     } catch (e: unknown) {
-      setError(e instanceof ErrorApi ? e.message : 'No se pudo actualizar la reserva')
+      setErrorMotivo(e instanceof ErrorApi ? e.message : 'No se pudo cancelar la reserva')
     } finally {
       setAccionId(null)
     }
@@ -133,30 +169,91 @@ export function GestionReservas() {
                     estilos={estilosEstadoReserva}
                     etiqueta={etiquetasEstadoReserva[reserva.estado]}
                   />
+                  {reserva.comprobanteEnviadoAt ? (
+                    <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-300">
+                      Comprobante enviado {formatearHora(reserva.comprobanteEnviadoAt)}
+                    </span>
+                  ) : (
+                    reserva.estado === 'activa' &&
+                    reserva.vencimientoComprobante && (
+                      <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-300">
+                        Pendiente de comprobante · vence {formatearHora(reserva.vencimientoComprobante)}
+                      </span>
+                    )
+                  )}
                 </div>
                 <p className="text-sm text-plata-400">
-                  Cliente: <span className="text-plata-300">{reserva.cliente.nombre}</span>
+                  Cliente: <span className="text-plata-300">{reserva.cliente.nombre}</span> · Seña:{' '}
+                  <span className="texto-numerico text-plata-300">{formatearPrecio(reserva.montoSenia)}</span>
                 </p>
                 <p className="text-sm text-plata-400">Reservada el {formatearFecha(reserva.createdAt)}</p>
               </div>
 
-              <div className="flex shrink-0 flex-wrap gap-2">
-                {reserva.estado === 'activa' && (
-                  <>
-                    <Boton tamano="sm" onClick={() => ejecutarAccion(reserva, 'confirmar')} disabled={accionId === reserva.id}>
-                      {accionId === reserva.id ? '…' : 'Confirmar venta'}
+              {reserva.estado === 'activa' && cancelandoId === reserva.id ? (
+                <div className="w-full space-y-2 lg:w-96">
+                  <label htmlFor={`motivo-${reserva.id}`} className="block text-xs font-medium text-plata-300">
+                    Motivo de la cancelación (el cliente lo va a ver)
+                  </label>
+                  <textarea
+                    id={`motivo-${reserva.id}`}
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    rows={3}
+                    placeholder="Ej.: el comprobante es ilegible o el monto no coincide con la seña…"
+                    className="w-full resize-none rounded-lg border border-white/10 bg-carbono-900 px-3 py-2 text-sm text-plata-100 placeholder:text-plata-600 focus:border-acento-400 focus:outline-none"
+                  />
+                  {errorMotivo && <p className="text-xs text-red-300">{errorMotivo}</p>}
+                  <div className="flex justify-end gap-2">
+                    <Boton
+                      variante="fantasma"
+                      tamano="sm"
+                      onClick={() => {
+                        setCancelandoId(null)
+                        setMotivo('')
+                        setErrorMotivo(null)
+                      }}
+                      disabled={accionId === reserva.id}
+                    >
+                      Volver
                     </Boton>
                     <Boton
                       variante="peligro"
                       tamano="sm"
                       onClick={() => ejecutarAccion(reserva, 'cancelar')}
-                      disabled={accionId === reserva.id}
+                      disabled={accionId === reserva.id || motivo.trim().length === 0}
                     >
-                      {accionId === reserva.id ? '…' : 'Cancelar'}
+                      {accionId === reserva.id ? 'Cancelando…' : 'Confirmar rechazo'}
                     </Boton>
-                  </>
-                )}
-              </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  {reserva.comprobanteEnviadoAt && (
+                    <Boton variante="secundario" tamano="sm" onClick={() => verComprobante(reserva.id)}>
+                      Ver comprobante
+                    </Boton>
+                  )}
+                  {reserva.estado === 'activa' && (
+                    <>
+                      <Boton tamano="sm" onClick={() => ejecutarAccion(reserva, 'confirmar')} disabled={accionId === reserva.id}>
+                        {accionId === reserva.id ? '…' : 'Confirmar venta'}
+                      </Boton>
+                      <Boton
+                        variante="peligro"
+                        tamano="sm"
+                        onClick={() => {
+                          setCancelandoId(reserva.id)
+                          setMotivo('')
+                          setErrorMotivo(null)
+                        }}
+                        disabled={accionId === reserva.id}
+                      >
+                        Rechazar / cancelar
+                      </Boton>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

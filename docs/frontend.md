@@ -54,10 +54,14 @@ frontend/src/
 | `/mis-consultas/:id` | `MisConsultas` | `cliente` |
 | `/vendedor/bandeja` | `BandejaEntrada` | `vendedor` |
 | `/vendedor/bandeja/:id` | `ChatVendedor` | `vendedor` |
+| `/vendedor/cotizaciones` | `BandejaCotizaciones` | `vendedor` |
+| `/vendedor/cotizaciones/:id` | `ChatCotizacionVendedor` | `vendedor` |
 | `/vendedor/test-drives` | `GestionTestDrives` | `vendedor` |
 | `/vendedor/reservas` | `GestionReservas` | `vendedor` |
 | `/mis-test-drives` | `MisTestDrives` | `cliente` |
 | `/mis-reservas` | `MisReservas` | `cliente` |
+| `/mis-cotizaciones` | `MisCotizaciones` | `cliente` |
+| `/mis-cotizaciones/:id` | `MisCotizaciones` | `cliente` |
 | `*` | `NoEncontrada` | Público |
 
 Las rutas privadas se protegen con `<RutaProtegida rol="...">` que redirige a

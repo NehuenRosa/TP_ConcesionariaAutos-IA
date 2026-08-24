@@ -2,23 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../services/api'
 
 export function useNotificaciones(autenticado: boolean) {
-  const [cantidad, setCantidad] = useState(0)
+  const [cantidadConsultas, setCantidadConsultas] = useState(0)
+  const [cantidadCotizaciones, setCantidadCotizaciones] = useState(0)
   const [nuevoAviso, setNuevoAviso] = useState(false)
-  const anteriorRef = useRef(0)
+  const anterioresRef = useRef({ consultas: 0, cotizaciones: 0 })
   const inicializadoRef = useRef(false)
 
   const verificar = useCallback(async () => {
     try {
       const resultado = await api.obtenerContadorNotificaciones()
-      if (resultado.contador > anteriorRef.current && inicializadoRef.current) {
-        setNuevoAviso(true)
+      if (inicializadoRef.current) {
+        const subio =
+          resultado.consultas > anterioresRef.current.consultas ||
+          resultado.cotizaciones > anterioresRef.current.cotizaciones
+        if (subio) setNuevoAviso(true)
       }
-      if (resultado.contador === 0) {
+      if (resultado.consultas === 0 && resultado.cotizaciones === 0) {
         setNuevoAviso(false)
       }
       inicializadoRef.current = true
-      anteriorRef.current = resultado.contador
-      setCantidad(resultado.contador)
+      anterioresRef.current = { consultas: resultado.consultas, cotizaciones: resultado.cotizaciones }
+      setCantidadConsultas(resultado.consultas)
+      setCantidadCotizaciones(resultado.cotizaciones)
     } catch {
       // Ignorar errores de polling
     }
@@ -31,11 +36,11 @@ export function useNotificaciones(autenticado: boolean) {
 
     verificar()
 
-    // Re-verificar cuando el chat marca mensajes como leídos
+    // Re-verificar cuando algún chat marca mensajes como leídos
     const handler = () => verificar()
     window.addEventListener('mensajes-leidos', handler)
 
-    // Polling liviano: solo consulta el contador, no las consultas completas
+    // Polling liviano: solo consulta el contador, no los hilos completos
     const intervalo = setInterval(verificar, 3000)
 
     return () => {
@@ -44,5 +49,5 @@ export function useNotificaciones(autenticado: boolean) {
     }
   }, [autenticado, verificar])
 
-  return { cantidad, nuevoAviso, descartarAviso }
+  return { cantidadConsultas, cantidadCotizaciones, nuevoAviso, descartarAviso }
 }

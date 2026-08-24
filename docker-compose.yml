@@ -98,6 +98,13 @@ services:
       MODELO_CHATBOT: ${MODELO_CHATBOT:-}
       MODELO_VISION: ${MODELO_VISION:-}
       ARGAUTOS_URL: ${ARGAUTOS_URL:-https://argautos.com/api/v1}
+      # "Continuar con Google" (CU-11): vacío = flujo deshabilitado (el backend
+      # responde 503 y el frontend oculta el botón).
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      # Seña de reserva (CU-08): datos bancarios mostrados al cliente. Vacíos =
+      # la UI indica que el personal pasará los datos.
+      CBU_CONCESIONARIA: ${CBU_CONCESIONARIA:-}
+      ALIAS_CONCESIONARIA: ${ALIAS_CONCESIONARIA:-}
     ports:
       - "127.0.0.1:${PUERTO_API:-8080}:8080"
     depends_on:

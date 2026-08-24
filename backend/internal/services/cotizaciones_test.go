@@ -222,3 +222,122 @@ func TestTextoCondicionesComerciales(t *testing.T) {
 		t.Errorf("cuota del Plan 30/70 esperada %.2f, obtenida %.2f", quiero, got)
 	}
 }
+
+// sembrarCotizacionPrueba inserta una cotización directamente en el fake con
+// los mensajes ya en claro: alcanza para probar conteos y marcas de lectura.
+func sembrarCotizacionPrueba(t *testing.T, repo *fakeCotizacionRepository, clienteID uint, vendedorID *uint, estado string, mensajes []models.MensajeCotizacion) *models.Cotizacion {
+	t.Helper()
+	cotizacion, err := repo.Crear(context.Background(), &models.Cotizacion{
+		VehiculoID: 7,
+		ClienteID:  clienteID,
+		VendedorID: vendedorID,
+		Estado:     estado,
+		Mensajes:   mensajes,
+	})
+	if err != nil {
+		t.Fatalf("no se pudo sembrar la cotización: %v", err)
+	}
+	return cotizacion
+}
+
+func TestCotizacionContarNoLeidosPorLado(t *testing.T) {
+	repo := nuevoFakeCotizacionRepository()
+	servicio := nuevoServicioCotizacionesPrueba(t, repo, nuevoFakeVehiculoRepository(), &fakeGeneradorCotizacion{})
+	ctx := context.Background()
+
+	// Abierta y sin asignar: mensaje de cliente, respuesta de IA y mensaje del
+	// vendedor sin leer.
+	sembrarCotizacionPrueba(t, repo, 5, nil, models.EstadoCotizacionAbierta, []models.MensajeCotizacion{
+		{Remitente: models.RemitenteCliente, Contenido: "hola"},
+		{Remitente: models.RemitenteIA, Contenido: "respuesta"},
+		{Remitente: models.RemitenteVendedor, Contenido: "te paso el valor"},
+	})
+
+	noLeidosCliente, err := servicio.ContarNoLeidos(ctx, 5, models.RolCliente)
+	if err != nil {
+		t.Fatalf("error contando para el cliente: %v", err)
+	}
+	if noLeidosCliente != 1 {
+		t.Errorf("el cliente debería tener 1 no leído (vendedor), obtuvo %d", noLeidosCliente)
+	}
+
+	// Para el personal cuenta solo el mensaje del cliente; la IA nunca suma.
+	noLeidosVendedor, err := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor)
+	if err != nil {
+		t.Fatalf("error contando para el personal: %v", err)
+	}
+	if noLeidosVendedor != 1 {
+		t.Errorf("el vendedor debería tener 1 no leído (cliente), obtuvo %d", noLeidosVendedor)
+	}
+
+	// Asignada a otro vendedor: sus mensajes de cliente no cuentan para el
+	// vendedor 9 pero sí para el asignado.
+	asignadaOtro := uint(3)
+	sembrarCotizacionPrueba(t, repo, 6, &asignadaOtro, models.EstadoCotizacionAbierta, []models.MensajeCotizacion{
+		{Remitente: models.RemitenteCliente, Contenido: "consulta"},
+	})
+	if n, _ := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor); n != 1 {
+		t.Errorf("el vendedor 9 no debería ver la cotización ajena, obtuvo %d", n)
+	}
+	// El vendedor 3 ve su asignada más la sin asignar de c1.
+	if n, _ := servicio.ContarNoLeidos(ctx, 3, models.RolVendedor); n != 2 {
+		t.Errorf("el vendedor asignado debería tener 2 no leídos (propia + sin asignar), obtuvo %d", n)
+	}
+
+	// Cerrada con mensaje de cliente sin leer: no avisa al personal.
+	sembrarCotizacionPrueba(t, repo, 5, nil, models.EstadoCotizacionCerrada, []models.MensajeCotizacion{
+		{Remitente: models.RemitenteCliente, Contenido: "última consulta"},
+	})
+	if n, _ := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor); n != 1 {
+		t.Errorf("las cerradas no deberían contar para el personal, obtuvo %d", n)
+	}
+}
+
+func TestCotizacionMarcarLeidas(t *testing.T) {
+	repo := nuevoFakeCotizacionRepository()
+	servicio := nuevoServicioCotizacionesPrueba(t, repo, nuevoFakeVehiculoRepository(), &fakeGeneradorCotizacion{})
+	ctx := context.Background()
+
+	c1 := sembrarCotizacionPrueba(t, repo, 5, nil, models.EstadoCotizacionAbierta, []models.MensajeCotizacion{
+		{Remitente: models.RemitenteCliente, Contenido: "hola"},
+		{Remitente: models.RemitenteIA, Contenido: "respuesta"},
+		{Remitente: models.RemitenteVendedor, Contenido: "te paso el valor"},
+	})
+	asignada := uint(9)
+	c2 := sembrarCotizacionPrueba(t, repo, 6, &asignada, models.EstadoCotizacionAbierta, []models.MensajeCotizacion{
+		{Remitente: models.RemitenteCliente, Contenido: "consulta"},
+	})
+
+	// Un cliente ajeno no puede marcar la cotización de otro.
+	if err := servicio.MarcarLeidas(ctx, 6, c1.ID, LadoCliente); !errors.Is(err, ErrCotizacionNoPertenece) {
+		t.Errorf("se esperaba ErrCotizacionNoPertenece, obtuvo %v", err)
+	}
+
+	// El dueño marca su lado: se limpian los mensajes de ia/vendedor.
+	if err := servicio.MarcarLeidas(ctx, 5, c1.ID, LadoCliente); err != nil {
+		t.Fatalf("no se pudo marcar el lado cliente: %v", err)
+	}
+	if n, _ := servicio.ContarNoLeidos(ctx, 5, models.RolCliente); n != 0 {
+		t.Errorf("después de abrir el hilo el cliente no debería tener no leídos, obtuvo %d", n)
+	}
+	// El mensaje del cliente sigue pendiente para el personal.
+	if n, _ := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor); n != 2 {
+		t.Errorf("marcar el lado cliente no debería tocar el lado personal, obtuvo %d", n)
+	}
+
+	// Otro vendedor intenta marcar una cotización que no es suya: no hace nada.
+	if err := servicio.MarcarLeidas(ctx, 3, c2.ID, LadoPersonal); err != nil {
+		t.Fatalf("marcar con un vendedor ajeno no debería fallar: %v", err)
+	}
+	if n, _ := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor); n != 2 {
+		t.Errorf("un vendedor ajeno no debería limpiar pendientes ajenos, obtuvo %d", n)
+	}
+
+	// El vendedor asignado abre el hilo y limpia su pendiente.
+	if err := servicio.MarcarLeidas(ctx, 9, c2.ID, LadoPersonal); err != nil {
+		t.Fatalf("no se pudo marcar el lado personal: %v", err)
+	}
+	if n, _ := servicio.ContarNoLeidos(ctx, 9, models.RolVendedor); n != 1 {
+		t.Errorf("quedaría 1 pendiente (mensaje de cliente en c1), obtuvo %d", n)
+	}
+}

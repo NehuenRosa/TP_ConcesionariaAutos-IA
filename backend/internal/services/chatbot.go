@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math/big"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,6 +116,10 @@ type RespuestaChat struct {
 	// un vehículo y la sesión correspondía a un cliente autenticado. Nil si no
 	// se creó ninguna cotización.
 	CotizacionID *uint
+	// VehiculosMencionados son los ids únicos de vehículos del stock que el
+	// asistente señaló con [VEHICULO:<id>] en su respuesta, ya validados contra
+	// el contexto servido, para que el frontend muestre enlaces a sus fichas.
+	VehiculosMencionados []uint
 }
 
 // ChatbotService define el contrato del asistente conversacional.
@@ -198,7 +203,7 @@ func (s *chatbotService) Responder(ctx context.Context, clienteID uint, mensaje 
 		return RespuestaChat{}, ErrMensajeMuyLargo
 	}
 
-	contexto, err := s.construirContextoStock(ctx)
+	contexto, idsServidos, err := s.construirContextoStock(ctx)
 	if err != nil {
 		return RespuestaChat{}, fmt.Errorf("obtener stock para el chatbot: %w", err)
 	}
@@ -211,6 +216,10 @@ func (s *chatbotService) Responder(ctx context.Context, clienteID uint, mensaje 
 	}
 
 	respuestaEditable, vehiculoID := limpiarMarcadorCotizacion(respuesta)
+	respuestaEditable = normalizarRespuestaConversacional(respuestaEditable)
+	mencionados, respuestaEditable := extraerMarcadoresVehiculo(respuestaEditable)
+	mencionados = filtrarIdsServidos(mencionados, idsServidos)
+
 	var cotizacionID *uint
 	if vehiculoID > 0 && clienteID > 0 {
 		cotizacion, err := s.crearCotizacionDesdeChat(ctx, vehiculoID, clienteID, mensaje, respuestaEditable)
@@ -221,7 +230,11 @@ func (s *chatbotService) Responder(ctx context.Context, clienteID uint, mensaje 
 		}
 	}
 
-	return RespuestaChat{Respuesta: respuestaEditable, CotizacionID: cotizacionID}, nil
+	return RespuestaChat{
+		Respuesta:            respuestaEditable,
+		CotizacionID:         cotizacionID,
+		VehiculosMencionados: mencionados,
+	}, nil
 }
 
 // Tasacion identifica el vehículo con el modelo de visión, consulta el valor
@@ -466,19 +479,22 @@ func (s *chatbotService) generarCodigoUnico(ctx context.Context) (string, error)
 }
 
 // construirContextoStock devuelve el texto con la ficha de los vehículos
-// disponibles, usado como contexto del asistente.
-func (s *chatbotService) construirContextoStock(ctx context.Context) (string, error) {
+// disponibles (usado como contexto del asistente) y un set con los ids que
+// figuran en ese contexto, para validar los marcadores de vehículos.
+func (s *chatbotService) construirContextoStock(ctx context.Context) (string, map[uint]struct{}, error) {
 	vehiculos, _, err := s.repositorioVehiculos.Listar(ctx, models.EstadoDisponible, repositories.FiltrosBusqueda{}, 1, 100)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	if len(vehiculos) == 0 {
-		return "No hay vehículos disponibles en el stock actualmente.", nil
+		return "No hay vehículos disponibles en el stock actualmente.", map[uint]struct{}{}, nil
 	}
 
+	idsServidos := make(map[uint]struct{}, len(vehiculos))
 	var partes []string
 	for _, vehiculo := range vehiculos {
+		idsServidos[vehiculo.ID] = struct{}{}
 		partes = append(partes, fmt.Sprintf(
 			"- [id:%d] %s %s %d | tipo: %s | combustible: %s | transmisión: %s | condición: %s | kilometraje: %d km | precio: $%.0f",
 			vehiculo.ID, vehiculo.Marca, vehiculo.Modelo, vehiculo.Anio,
@@ -486,7 +502,7 @@ func (s *chatbotService) construirContextoStock(ctx context.Context) (string, er
 			vehiculo.Condicion, vehiculo.Kilometraje, vehiculo.Precio,
 		))
 	}
-	return strings.Join(partes, "\n"), nil
+	return strings.Join(partes, "\n"), idsServidos, nil
 }
 
 // construirMensajes arma la secuencia de mensajes para el chat general: prompt
@@ -546,6 +562,84 @@ func limpiarMarcadorCotizacion(respuesta string) (string, uint) {
 	return limpia, uint(id)
 }
 
+// regexMarcadorVehiculo reconoce el marcador interno con el que la IA señala
+// un vehículo puntual del stock que mencionó en su respuesta, por ejemplo
+// "[VEHICULO:7]".
+var regexMarcadorVehiculo = regexp.MustCompile(`\[VEHICULO:(\d+)\]`)
+
+// regexEspaciosDobles colapsa espacios repetidos en una misma línea sin tocar
+// los saltos de línea ni los párrafos.
+var regexEspaciosDobles = regexp.MustCompile(`[^\S\n]{2,}`)
+
+// regexEspacioAntesPuntuacion quita el espacio que queda antes de un signo de
+// puntuación al eliminar un marcador intermedio.
+var regexEspacioAntesPuntuacion = regexp.MustCompile(`[^\S\n]+([.,;:!?])`)
+
+// MaximoVehiculosMencionados limita los enlaces por respuesta para no saturar
+// la interfaz si el modelo repite el marcador muchas veces.
+const MaximoVehiculosMencionados = 5
+
+// extraerMarcadoresVehiculo quita los marcadores de vehículos del texto y
+// devuelve los ids únicos en orden de aparición (hasta 5) más la respuesta
+// limpia lista para mostrarse al usuario.
+func extraerMarcadoresVehiculo(respuesta string) ([]uint, string) {
+	coincidencias := regexMarcadorVehiculo.FindAllStringSubmatch(respuesta, -1)
+	textoLimpio := regexEspacioAntesPuntuacion.ReplaceAllString(
+		regexEspaciosDobles.ReplaceAllString(regexMarcadorVehiculo.ReplaceAllString(respuesta, ""), " "),
+		"$1",
+	)
+	textoLimpio = strings.TrimSpace(textoLimpio)
+	if len(coincidencias) == 0 {
+		return nil, textoLimpio
+	}
+
+	vistos := make(map[uint]struct{}, len(coincidencias))
+	ids := make([]uint, 0, len(coincidencias))
+	for _, coincidencia := range coincidencias {
+		id64, err := strconv.ParseUint(coincidencia[1], 10, 32)
+		if err != nil || id64 == 0 {
+			continue
+		}
+		id := uint(id64)
+		if _, repetido := vistos[id]; repetido {
+			continue
+		}
+		vistos[id] = struct{}{}
+		if len(ids) < MaximoVehiculosMencionados {
+			ids = append(ids, id)
+		}
+	}
+	return ids, textoLimpio
+}
+
+// filtrarIdsServidos descarta los ids que no figuraban en el contexto del
+// stock servido al modelo, para nunca enlazar un vehículo inexistente, dado
+// de baja o reservado.
+func filtrarIdsServidos(ids []uint, servidos map[uint]struct{}) []uint {
+	if len(ids) == 0 || len(servidos) == 0 {
+		return nil
+	}
+	filtrados := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := servidos[id]; ok {
+			filtrados = append(filtrados, id)
+		}
+	}
+	return filtrados
+}
+
+// normalizarRespuestaConversacional quita el formato Markdown que algunos
+// modelos agregan aunque se les pida responder como una conversación.
+func normalizarRespuestaConversacional(respuesta string) string {
+	respuesta = strings.TrimSpace(respuesta)
+	respuesta = regexp.MustCompile("(?m)^```(?:markdown|md|texto|text)?\\s*$|^```\\s*$|^#{1,6}\\s+").ReplaceAllString(respuesta, "")
+	respuesta = regexp.MustCompile(`\[([^\]]+)\]\([^\)]+\)`).ReplaceAllString(respuesta, "$1")
+	respuesta = regexp.MustCompile(`(?m)^\s*[-*+]\s+`).ReplaceAllString(respuesta, "")
+	respuesta = regexp.MustCompile(`\*\*([^*\n]+)\*\*|__([^_\n]+)__`).ReplaceAllString(respuesta, "$1$2")
+	respuesta = regexp.MustCompile(`\*([^*\n]+)\*|_([^_\n]+)_`).ReplaceAllString(respuesta, "$1$2")
+	return strings.TrimSpace(respuesta)
+}
+
 // crearCotizacionDesdeChat crea una cotización desde el chat general con el
 // mensaje del cliente y la respuesta del asistente, ambos cifrados. Valida que
 // el vehículo exista y siga disponible en el stock.
@@ -579,7 +673,7 @@ func (s *chatbotService) GenerarCotizacion(ctx context.Context, vehiculo models.
 		slog.Error("Error al generar respuesta de cotización", "error", err.Error())
 		return respuestaFallbackChat, nil
 	}
-	return respuesta, nil
+	return normalizarRespuestaConversacional(respuesta), nil
 }
 
 // fichaVehiculo devuelve el texto de la ficha real de un vehículo del stock.
@@ -790,7 +884,13 @@ func (s *chatbotService) generarConGoogleAI(ctx context.Context, modelo string, 
 }
 
 // promptSistema es el prompt base del asistente con el contexto inyectado.
-const promptSistema = `Sos el asistente virtual de una concesionaria de autos. Respondés en español, de forma breve y útil.
+const promptSistema = `Sos el asistente virtual de una concesionaria de autos. Respondés en español, de forma breve, cálida y útil.
+
+Estilo de respuesta:
+- Escribí como una persona que atiende por chat, con frases naturales y párrafos cortos.
+- Usá texto plano: no uses Markdown, títulos, negritas, cursivas, bloques de código ni listas con viñetas o numeradas.
+- No empieces cada frase en una línea nueva; agrupá las ideas en uno o dos párrafos cuando corresponda.
+- Mencioná los datos importantes dentro de la oración, sin formato de ficha técnica.
 
 Reglas:
 - Solo podés informar sobre los vehículos del stock disponible que figuran en el contexto provisto.
@@ -800,6 +900,7 @@ Reglas:
 - Orientá siempre al usuario a acciones concretas del sitio: crear una consulta o cotización sobre un vehículo, o solicitar un test drive.
 - Comparación en vivo: si el usuario menciona el auto que tiene y el auto que quiere comprar de nuestro catálogo, ofrecé compararlos y preguntale qué aspectos quiere comparar (precio, consumo, potencia, seguridad, equipamiento, etc.). Usá la ficha real del stock para el auto de la concesionaria y tu conocimiento general para el auto del usuario. Nunca inventes datos de nuestro stock.
 - Cotización: usá el marcador [COTIZACION:<id>] SOLO si el usuario pide explícitamente cotizar, presupuestar o conocer cómo pagar/financiar un vehículo del stock. No lo uses cuando solo pregunta características, disponibilidad, compara modelos o quiere un test drive: en esos casos respondé sin marcador. Si el vehículo mencionado no está en el stock, no pongas el marcador. Cuando pongas el marcador, finalizá tu respuesta con la línea exacta [COTIZACION:<id>] usando el id que figura entre corchetes en el contexto (ej. [id:3]) y que sea lo último que escribas, sin texto después.
+- Enlaces a fichas: cada vez que tu respuesta mencione uno o más vehículos puntuales del stock, agregá al final, después de todo el texto, el marcador [VEHICULO:<id>] por cada vehículo mencionado, usando el id que figura entre corchetes en el contexto (ej. [id:3] → [VEHICULO:3]). Solo vehículos que figuren en el contexto; nunca inventes ids ni uses el marcador si hablás en general sin nombrar un vehículo concreto.
 
 Contexto del stock disponible:
 {{contexto}}`
@@ -807,7 +908,12 @@ Contexto del stock disponible:
 // promptCotizacion es el prompt del chat dentro de una cotización: la IA se
 // centra en un único vehículo real del stock y en las condiciones comerciales
 // oficiales de la concesionaria. Nunca inventa precios, tasas ni montos.
-const promptCotizacion = `Sos el asistente de cotizaciones de una concesionaria de autos. Estás atendiendo una conversación sobre un vehículo específico del stock. Respondés en español, de forma breve y útil.
+const promptCotizacion = `Sos el asistente de cotizaciones de una concesionaria de autos. Estás atendiendo una conversación sobre un vehículo específico del stock. Respondés en español, de forma breve, cálida y útil.
+
+Estilo de respuesta:
+- Escribí como una persona que atiende por chat, con frases naturales y párrafos cortos.
+- Usá texto plano: no uses Markdown, títulos, negritas, cursivas, bloques de código ni listas con viñetas o numeradas.
+- Presentá los datos comerciales dentro de la conversación, sin formato de ficha técnica.
 
 Vehículo a cotizar (ficha real del stock):
 {{ficha}}

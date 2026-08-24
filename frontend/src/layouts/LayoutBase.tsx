@@ -24,7 +24,9 @@ export function LayoutBase() {
   const { usuario, cargando, cerrarSesion, esAdministrador } = useAuth()
   const esCliente = usuario?.rol === 'cliente'
   const esVendedor = usuario?.rol === 'vendedor'
-  const { cantidad, nuevoAviso, descartarAviso } = useNotificaciones(!cargando && !!usuario)
+  const { cantidadConsultas, cantidadCotizaciones, nuevoAviso, descartarAviso } = useNotificaciones(
+    !cargando && !!usuario,
+  )
   const [menuAbierto, setMenuAbierto] = useState(false)
 
   const destinoMensajes = esCliente ? '/mis-consultas' : '/vendedor/bandeja'
@@ -40,17 +42,30 @@ export function LayoutBase() {
       isActive ? 'text-plata-100' : 'text-plata-400 hover:text-plata-100'
     }`
 
-  const enlaces = [
+  type EnlaceNav = {
+    a: string
+    texto: string
+    mostrar: boolean
+    clave?: 'consultas' | 'cotizaciones'
+  }
+
+  const todosLosEnlaces: EnlaceNav[] = [
     { a: '/catalogo', texto: 'Catálogo', mostrar: true },
-    { a: '/mis-consultas', texto: 'Mis consultas', mostrar: esCliente, notificacion: esCliente },
-    { a: '/mis-cotizaciones', texto: 'Cotizaciones', mostrar: esCliente },
+    { a: '/mis-consultas', texto: 'Mis consultas', mostrar: esCliente, clave: 'consultas' },
+    { a: '/mis-cotizaciones', texto: 'Cotizaciones', mostrar: esCliente, clave: 'cotizaciones' },
     { a: '/mis-test-drives', texto: 'Test drives', mostrar: esCliente },
     { a: '/mis-reservas', texto: 'Reservas', mostrar: esCliente },
-    { a: '/vendedor/bandeja', texto: 'Bandeja', mostrar: esVendedor, notificacion: esVendedor },
+    { a: '/vendedor/bandeja', texto: 'Bandeja', mostrar: esVendedor, clave: 'consultas' },
+    { a: '/vendedor/cotizaciones', texto: 'Cotizaciones IA', mostrar: esVendedor, clave: 'cotizaciones' },
     { a: '/vendedor/test-drives', texto: 'Test drives', mostrar: esVendedor },
     { a: '/vendedor/reservas', texto: 'Reservas', mostrar: esVendedor },
     { a: '/admin', texto: 'Administración', mostrar: esAdministrador },
-  ].filter((enlace) => enlace.mostrar)
+  ]
+  const enlaces = todosLosEnlaces.filter((enlace) => enlace.mostrar)
+
+  // tieneNoLeidos resuelve qué puntito corresponde a cada sección.
+  const tieneNoLeidos = (enlace: EnlaceNav) =>
+    enlace.clave === 'consultas' ? cantidadConsultas > 0 : enlace.clave === 'cotizaciones' && cantidadCotizaciones > 0
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -62,7 +77,7 @@ export function LayoutBase() {
             {enlaces.map((enlace) => (
               <NavLink key={enlace.a} to={enlace.a} className={claseEnlace} end={enlace.a === '/admin'}>
                 {enlace.texto}
-                {enlace.notificacion && cantidad > 0 && (
+                {tieneNoLeidos(enlace) && (
                   <span className="absolute -top-0.5 -right-2 flex h-2 w-2">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-acento-400 opacity-60" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-acento-400" />
@@ -253,7 +268,7 @@ export function LayoutBase() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-display text-sm font-semibold text-plata-100">Tenés mensajes nuevos</p>
-            <p className="text-xs text-plata-400">Te escribieron en una consulta.</p>
+            <p className="text-xs text-plata-400">Te escribieron en una consulta o cotización.</p>
           </div>
           <Link
             to={destinoMensajes}
