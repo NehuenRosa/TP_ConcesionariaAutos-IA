@@ -32,9 +32,18 @@ func NuevoTurnoTestDriveHandler(servicio services.TurnoTestDriveService) *TurnoT
 	return &TurnoTestDriveHandler{servicio: servicio}
 }
 
-// Franjas responde el catálogo público de franjas horarias.
+// Franjas responde el catálogo público de franjas horarias. Si llegan los
+// query params vehiculoId y fecha, marca cuáles ya están ocupadas.
 func (h *TurnoTestDriveHandler) Franjas(c *gin.Context) {
-	c.JSON(http.StatusOK, h.servicio.Franjas())
+	vehiculoID, _ := strconv.ParseUint(c.Query("vehiculoId"), 10, 64)
+	fecha := c.Query("fecha")
+
+	franjas, err := h.servicio.FranjasConDisponibilidad(c.Request.Context(), uint(vehiculoID), fecha)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener las franjas"})
+		return
+	}
+	c.JSON(http.StatusOK, franjas)
 }
 
 // Solicitar crea un turno solicitado desde el cliente autenticado.
@@ -69,6 +78,8 @@ func (h *TurnoTestDriveHandler) Solicitar(c *gin.Context) {
 		case errors.Is(err, services.ErrVehiculoNoDisponible):
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		case errors.Is(err, services.ErrTurnoSuperpuesto):
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrTurnoDuplicadoVehiculo):
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo solicitar el test drive"})

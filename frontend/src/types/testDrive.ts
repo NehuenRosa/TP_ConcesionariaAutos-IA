@@ -4,6 +4,7 @@ export interface FranjaHoraria {
   id: string
   inicio: string
   fin: string
+  ocupada?: boolean
 }
 
 export interface ClienteResumen {

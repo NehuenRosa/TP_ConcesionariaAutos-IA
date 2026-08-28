@@ -112,7 +112,7 @@ func construirConsultaBusqueda(consulta *gorm.DB, filtros FiltrosBusqueda) *gorm
 		consulta = consulta.Where("precio <= ?", *filtros.PrecioMax)
 	}
 	if filtros.Tipo != "" {
-		consulta = consulta.Where("tipo = ?", filtros.Tipo)
+		consulta = consulta.Where("LOWER(tipo) = LOWER(?)", filtros.Tipo)
 	}
 	if filtros.Combustible != "" {
 		consulta = consulta.Where("combustible = ?", filtros.Combustible)

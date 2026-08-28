@@ -23,6 +23,9 @@ var (
 	// ErrTurnoSuperpuesto indica que ya hay un turno activo para la misma
 	// unidad en la misma fecha y franja.
 	ErrTurnoSuperpuesto = errors.New("el turno ya está ocupado para esa unidad, fecha y franja")
+	// ErrTurnoDuplicadoVehiculo indica que el cliente ya tiene un turno activo
+	// para el mismo vehículo.
+	ErrTurnoDuplicadoVehiculo = errors.New("ya tenés un test drive pendiente para este vehículo, esperá a que lo completen o cancelelo")
 	// ErrTurnoEstadoInvalido indica que la transición de estado solicitada no es válida.
 	ErrTurnoEstadoInvalido = errors.New("no se puede cambiar el estado del turno")
 	// ErrFiltroEstadoTurnoInvalido indica que el filtro de estado no es válido.
@@ -47,6 +50,10 @@ type TurnoTestDriveService interface {
 	Completar(ctx context.Context, turnoID uint) (*models.TurnoTestDrive, error)
 	// Franjas devuelve el catálogo de franjas horarias predefinidas.
 	Franjas() []models.FranjaHoraria
+	// FranjasConDisponibilidad devuelve el catálogo de franjas marcando las
+	// ocupadas para una unidad y fecha. Si faltan vehiculoID o fecha, devuelve
+	// el catálogo completo sin marcar ocupadas.
+	FranjasConDisponibilidad(ctx context.Context, vehiculoID uint, fecha string) ([]models.FranjaHoraria, error)
 }
 
 // turnoTestDriveService implementa TurnoTestDriveService.
@@ -66,8 +73,9 @@ func NuevoTurnoTestDriveService(
 	}
 }
 
-// Solicitar valida el vehículo, la fecha y la franja, verifica que no haya
-// superposición y crea el turno en estado solicitado.
+// Solicitar valida el vehículo, la fecha y la franja, verifica que el cliente
+// no tenga otro turno activo para el mismo vehículo ni que la franja esté
+// ocupada, y crea el turno en estado solicitado.
 func (s *turnoTestDriveService) Solicitar(ctx context.Context, clienteID uint, vehiculoID uint, fecha string, franja string) (*models.TurnoTestDrive, error) {
 	if !models.FranjaValida(franja) {
 		return nil, ErrDatosTurnoInvalidos
@@ -97,13 +105,15 @@ func (s *turnoTestDriveService) Solicitar(ctx context.Context, clienteID uint, v
 		Franja:     franja,
 		Estado:     models.EstadoTurnoSolicitado,
 	}
-	creado, creadoOK, err := s.repositorio.CrearSiSinSuperposicion(ctx, turno)
+	creado, err := s.repositorio.CrearSiDisponible(ctx, turno)
 	if err != nil {
+		if errors.Is(err, repositories.ErrFranjaOcupada) {
+			return nil, ErrTurnoSuperpuesto
+		}
+		if errors.Is(err, repositories.ErrClienteYaTieneTurno) {
+			return nil, ErrTurnoDuplicadoVehiculo
+		}
 		return nil, err
-	}
-	// El repositorio devuelve true solo si creó el turno sin superposición.
-	if !creadoOK {
-		return nil, ErrTurnoSuperpuesto
 	}
 	return creado, nil
 }
@@ -196,6 +206,28 @@ func (s *turnoTestDriveService) Completar(ctx context.Context, turnoID uint) (*m
 // Franjas devuelve el catálogo de franjas horarias predefinidas.
 func (s *turnoTestDriveService) Franjas() []models.FranjaHoraria {
 	return models.FranjasDisponibles()
+}
+
+// FranjasConDisponibilidad devuelve las franjas del catálogo con el flag
+// Ocupada seteado según los turnos activos de la unidad y fecha pedidas.
+func (s *turnoTestDriveService) FranjasConDisponibilidad(ctx context.Context, vehiculoID uint, fecha string) ([]models.FranjaHoraria, error) {
+	franjas := models.FranjasDisponibles()
+	if vehiculoID == 0 || fecha == "" {
+		return franjas, nil
+	}
+
+	ocupadas, err := s.repositorio.Ocupadas(ctx, vehiculoID, fecha)
+	if err != nil {
+		return nil, err
+	}
+	ocupado := make(map[string]bool, len(ocupadas))
+	for _, id := range ocupadas {
+		ocupado[id] = true
+	}
+	for i := range franjas {
+		franjas[i].Ocupada = ocupado[franjas[i].ID]
+	}
+	return franjas, nil
 }
 
 // esFechaValida valida el formato YYYY-MM-DD y que la fecha no sea anterior a

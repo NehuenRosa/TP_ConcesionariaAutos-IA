@@ -10,6 +10,7 @@ import { FormularioTestDrive } from './FormularioTestDrive'
 const mocks = vi.hoisted(() => ({
   obtenerVehiculo: vi.fn(),
   obtenerFranjas: vi.fn(),
+  listarMisTestDrives: vi.fn(),
   solicitarTestDrive: vi.fn(),
 }))
 
@@ -44,9 +45,10 @@ const vehiculo: Vehiculo = {
 }
 
 const franjas: FranjaHoraria[] = [
-  { id: '09:00', inicio: '09:00', fin: '10:00' },
-  { id: '10:00', inicio: '10:00', fin: '11:00' },
-  { id: '14:00', inicio: '14:00', fin: '15:00' },
+  { id: '09:00', inicio: '09:00', fin: '09:30' },
+  { id: '09:30', inicio: '09:30', fin: '10:00', ocupada: true },
+  { id: '10:00', inicio: '10:00', fin: '10:30' },
+  { id: '10:30', inicio: '10:30', fin: '11:00' },
 ]
 
 // fechaMananaISO devuelve mañana en formato local: evita que las franjas de
@@ -80,6 +82,8 @@ describe('FormularioTestDrive', () => {
     vi.mocked(api.obtenerVehiculo).mockResolvedValue(vehiculo)
     vi.mocked(api.obtenerFranjas).mockReset()
     vi.mocked(api.obtenerFranjas).mockResolvedValue(franjas)
+    vi.mocked(api.listarMisTestDrives).mockReset()
+    vi.mocked(api.listarMisTestDrives).mockResolvedValue([])
     vi.mocked(api.solicitarTestDrive).mockReset()
   })
 
@@ -87,8 +91,36 @@ describe('FormularioTestDrive', () => {
     renderizar()
 
     expect(await screen.findByRole('button', { name: /^09:00/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^09:30/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^10:00/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^14:00/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^10:30/ })).toBeInTheDocument()
+  })
+
+  it('marca en rojo y deshabilita las horas ya ocupadas', async () => {
+    renderizar()
+
+    const ocupada = await screen.findByRole('button', { name: /ocupado/i })
+    expect(ocupada).toBeDisabled()
+    expect(ocupada).toHaveTextContent('Ocupado')
+  })
+
+  it('avisa y bloquea el envío si ya hay un turno pendiente para el auto', async () => {
+    vi.mocked(api.listarMisTestDrives).mockResolvedValue([
+      {
+        id: 9,
+        vehiculo: { id: 5, marca: 'Toyota', modelo: 'Corolla', anio: 2020, precio: 20000, condicion: 'usado', tipo: 'sedan', imagen: '' },
+        cliente: { id: 7, nombre: 'Ana' },
+        fecha: fechaMananaISO(),
+        franja: '09:00',
+        estado: 'solicitado',
+      },
+    ])
+
+    renderizar()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ya tenés un test drive pendiente')
+    const solicitar = screen.getByRole('button', { name: /ya tenés un turno pendiente/i })
+    expect(solicitar).toBeDisabled()
   })
 
   it('el botón de solicitar queda deshabilitado hasta elegir una hora', async () => {

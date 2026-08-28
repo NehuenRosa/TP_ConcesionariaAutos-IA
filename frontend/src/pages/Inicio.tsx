@@ -16,9 +16,9 @@ import {
 } from '../components/ui/EtiquetaEstado'
 
 const CATEGORIAS = [
-  { tipo: 'SUV', imagen: 'https://images.unsplash.com/photo-1571607388263-1044f9ea01dd?w=1200&q=80' },
-  { tipo: 'Sedán', imagen: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200&q=80' },
-  { tipo: 'Deportivo', imagen: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80' },
+  { tipo: 'SUV', valor: 'suv', imagen: 'https://images.unsplash.com/photo-1571607388263-1044f9ea01dd?w=1200&q=80' },
+  { tipo: 'Sedán', valor: 'sedán', imagen: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=1200&q=80' },
+  { tipo: 'Deportivo', valor: 'coupe', imagen: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1200&q=80' },
 ]
 
 const VALORES = [
@@ -172,7 +172,7 @@ function SeccionCategorias() {
         {CATEGORIAS.map((categoria) => (
           <Link
             key={categoria.tipo}
-            to="/catalogo"
+            to={`/catalogo?tipo=${encodeURIComponent(categoria.valor)}`}
             className="group relative aspect-[4/3] overflow-hidden rounded-xl border border-white/8"
           >
             <img

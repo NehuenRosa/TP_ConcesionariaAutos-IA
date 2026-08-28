@@ -234,7 +234,8 @@ export const api = {
     peticion<{ contador: number; consultas: number; cotizaciones: number }>('/notificaciones/contador'),
 
   // Test drives
-  obtenerFranjas: () => peticion<FranjaHoraria[]>('/test-drives/franjas'),
+  obtenerFranjas: (vehiculoId: number, fecha: string) =>
+    peticion<FranjaHoraria[]>(`/test-drives/franjas?vehiculoId=${vehiculoId}&fecha=${fecha}`),
   solicitarTestDrive: (datos: SolicitarTestDrive) =>
     peticion<TurnoTestDrive>('/test-drives', {
       method: 'POST',

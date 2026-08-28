@@ -5,6 +5,7 @@ import { TarjetaMetrica } from '../components/graficos/TarjetaMetrica'
 import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
 import { MensajeError } from '../components/ui/MensajeError'
 import { ContenidoCargando } from '../components/ui/Spinner'
+import { formatearPrecio } from '../utils/formato'
 import { api } from '../services/api'
 import type { Metricas } from '../types/metricas'
 
@@ -26,6 +27,15 @@ const ETIQUETAS_ESTADO: Record<string, string> = {
   reservado: 'Reservados',
   vendido: 'Vendidos',
   dado_de_baja: 'Dados de baja',
+}
+
+// colorDiasEnStock pinta la barra según cuánto lleva publicado el vehículo:
+// cuanto más tiempo, más caliente el color para resaltar la rotación lenta.
+function colorDiasEnStock(dias: number): string {
+  if (dias >= 90) return 'bg-red-500'
+  if (dias >= 60) return 'bg-orange-500'
+  if (dias >= 30) return 'bg-amber-500'
+  return 'bg-emerald-500'
 }
 
 const SECCIONES = [
@@ -110,6 +120,43 @@ export function PanelAdministracion() {
       (metricas?.consultasPorPeriodo ?? []).map((dia) => ({
         etiqueta: dia.fecha,
         valor: dia.cantidad,
+      })),
+    [metricas],
+  )
+
+  const datosVentas: BarraDatos[] = useMemo(
+    () =>
+      (metricas?.ventasPorPeriodo ?? []).map((dia) => ({
+        etiqueta: dia.fecha,
+        valor: dia.cantidad,
+      })),
+    [metricas],
+  )
+
+  const datosTestDrives: BarraDatos[] = useMemo(
+    () =>
+      (metricas?.testDrivesPorPeriodo ?? []).map((dia) => ({
+        etiqueta: dia.fecha,
+        valor: dia.cantidad,
+      })),
+    [metricas],
+  )
+
+  const datosVentasMarca: BarraDatos[] = useMemo(
+    () =>
+      (metricas?.ventasPorMarca ?? []).map((venta) => ({
+        etiqueta: venta.marca,
+        valor: venta.cantidad,
+      })),
+    [metricas],
+  )
+
+  const datosDiasEnStock: BarraDatos[] = useMemo(
+    () =>
+      (metricas?.vehiculosEnStock ?? []).map((vehiculo) => ({
+        etiqueta: `${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.anio}`,
+        valor: vehiculo.diasEnStock,
+        color: colorDiasEnStock(vehiculo.diasEnStock),
       })),
     [metricas],
   )
@@ -203,31 +250,78 @@ export function PanelAdministracion() {
             </section>
 
             <section className="rounded-2xl border border-white/8 bg-carbono-850/60 p-6 backdrop-blur-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-display text-lg font-semibold text-plata-100">Consultas por período</h2>
-                <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-carbono-900 p-1">
-                  {PERIODOS.map((opcion) => (
-                    <button
-                      key={opcion.valor}
-                      type="button"
-                      onClick={() => setPeriodo(opcion.valor)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                        periodo === opcion.valor
-                          ? 'bg-acento-500/20 text-acento-300'
-                          : 'text-plata-400 hover:text-plata-200'
-                      }`}
-                    >
-                      {opcion.etiqueta}
-                    </button>
-                  ))}
-                </div>
+              <h2 className="font-display text-lg font-semibold text-plata-100">Días en stock</h2>
+              <div className="mt-5">
+                <GraficoBarras
+                  datos={datosDiasEnStock}
+                  descripcion="Vehículos disponibles con más tiempo publicado. El color señala la rotación lenta."
+                />
               </div>
+            </section>
+          </div>
+
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-lg font-semibold text-plata-100">Evolución por período</h2>
+            <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-carbono-900 p-1">
+              {PERIODOS.map((opcion) => (
+                <button
+                  key={opcion.valor}
+                  type="button"
+                  onClick={() => setPeriodo(opcion.valor)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    periodo === opcion.valor
+                      ? 'bg-acento-500/20 text-acento-300'
+                      : 'text-plata-400 hover:text-plata-200'
+                  }`}
+                >
+                  {opcion.etiqueta}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <section className="rounded-2xl border border-white/8 bg-carbono-850/60 p-6 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-plata-100">Consultas por período</h2>
               <div className="mt-5">
                 <GraficoBarras
                   datos={datosConsultas}
                   orientacion="vertical"
                   descripcion="Consultas creadas por día en el período seleccionado."
                 />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/8 bg-carbono-850/60 p-6 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-plata-100">Ventas por período</h2>
+              <p className="mt-1 text-sm text-plata-400">
+                Ingreso del período:{' '}
+                <span className="font-semibold text-emerald-300">{formatearPrecio(metricas.ingresoPorPeriodo)}</span>
+              </p>
+              <div className="mt-5">
+                <GraficoBarras
+                  datos={datosVentas}
+                  orientacion="vertical"
+                  descripcion="Ventas confirmadas por día en el período seleccionado."
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/8 bg-carbono-850/60 p-6 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-plata-100">Test drives por período</h2>
+              <div className="mt-5">
+                <GraficoBarras
+                  datos={datosTestDrives}
+                  orientacion="vertical"
+                  descripcion="Turnos agendados por día en el período seleccionado."
+                />
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/8 bg-carbono-850/60 p-6 backdrop-blur-sm">
+              <h2 className="font-display text-lg font-semibold text-plata-100">Ventas por marca</h2>
+              <div className="mt-5">
+                <GraficoBarras datos={datosVentasMarca} descripcion="Unidades vendidas según la marca del vehículo." />
               </div>
             </section>
           </div>

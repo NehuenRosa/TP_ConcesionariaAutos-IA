@@ -19,16 +19,24 @@ var (
 // periodosMetricasValidos son los valores permitidos para el parámetro periodo.
 var periodosMetricasValidos = map[int]bool{7: true, 30: true, 90: true}
 
+// limiteVehiculosEnStock es el tope de vehículos del gráfico de antigüedad.
+const limiteVehiculosEnStock = 8
+
 // Metricas es el payload completo del panel de administración.
 type Metricas struct {
-	VehiculosPorEstado   []repositories.ConteoPorEstado `json:"vehiculosPorEstado"`
-	ConsultasPorPeriodo  []repositories.ConsultaPorDia  `json:"consultasPorPeriodo"`
-	ReservasActivas      int64                           `json:"reservasActivas"`
-	ReservasVendidas     int64                           `json:"reservasVendidas"`
-	TestDrivesAgendados  int64                           `json:"testDrivesAgendados"`
-	TestDrivesCompletados int64                          `json:"testDrivesCompletados"`
-	ConsultasAbiertas    int64                           `json:"consultasAbiertas"`
-	TotalUsuarios        int64                           `json:"totalUsuarios"`
+	VehiculosPorEstado    []repositories.ConteoPorEstado `json:"vehiculosPorEstado"`
+	ConsultasPorPeriodo   []repositories.CantidadPorDia  `json:"consultasPorPeriodo"`
+	VentasPorPeriodo      []repositories.CantidadPorDia  `json:"ventasPorPeriodo"`
+	IngresoPorPeriodo     float64                         `json:"ingresoPorPeriodo"`
+	VentasPorMarca        []repositories.ConteoPorMarca   `json:"ventasPorMarca"`
+	TestDrivesPorPeriodo  []repositories.CantidadPorDia   `json:"testDrivesPorPeriodo"`
+	VehiculosEnStock      []repositories.VehiculoEnStock  `json:"vehiculosEnStock"`
+	ReservasActivas       int64                           `json:"reservasActivas"`
+	ReservasVendidas      int64                           `json:"reservasVendidas"`
+	TestDrivesAgendados   int64                           `json:"testDrivesAgendados"`
+	TestDrivesCompletados int64                           `json:"testDrivesCompletados"`
+	ConsultasAbiertas     int64                           `json:"consultasAbiertas"`
+	TotalUsuarios         int64                           `json:"totalUsuarios"`
 }
 
 // MetricasService define el contrato de las métricas del panel.
@@ -67,6 +75,31 @@ func (s *metricasService) Obtener(ctx context.Context, periodo string) (*Metrica
 		return nil, fmt.Errorf("contar consultas por día: %w", err)
 	}
 
+	ventas, err := s.repositorio.ContarVentasPorDia(ctx, inicio, desplazamientoSegundos)
+	if err != nil {
+		return nil, fmt.Errorf("contar ventas por día: %w", err)
+	}
+
+	ingreso, err := s.repositorio.SumarIngresosPorPeriodo(ctx, inicio)
+	if err != nil {
+		return nil, fmt.Errorf("sumar ingresos por período: %w", err)
+	}
+
+	ventasPorMarca, err := s.repositorio.ContarVentasPorMarca(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("contar ventas por marca: %w", err)
+	}
+
+	testDrives, err := s.repositorio.ContarTestDrivesPorDia(ctx, inicio, desplazamientoSegundos)
+	if err != nil {
+		return nil, fmt.Errorf("contar test drives por día: %w", err)
+	}
+
+	vehiculosAntiguos, err := s.repositorio.TraerVehiculosConAntiguedad(ctx, limiteVehiculosEnStock)
+	if err != nil {
+		return nil, fmt.Errorf("traer vehículos con antigüedad: %w", err)
+	}
+
 	reservasActivas, err := s.repositorio.ContarReservasActivas(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("contar reservas activas: %w", err)
@@ -98,15 +131,41 @@ func (s *metricasService) Obtener(ctx context.Context, periodo string) (*Metrica
 	}
 
 	return &Metricas{
-		VehiculosPorEstado:   vehiculos,
-		ConsultasPorPeriodo:  completarSerie(consultas, dias),
-		ReservasActivas:      reservasActivas,
-		ReservasVendidas:     reservasVendidas,
-		TestDrivesAgendados:  testDrivesAgendados,
+		VehiculosPorEstado:    vehiculos,
+		ConsultasPorPeriodo:   completarSerie(consultas, dias),
+		VentasPorPeriodo:      completarSerie(ventas, dias),
+		IngresoPorPeriodo:     ingreso,
+		VentasPorMarca:        ventasPorMarca,
+		TestDrivesPorPeriodo:  completarSerie(testDrives, dias),
+		VehiculosEnStock:      conDiasEnStock(vehiculosAntiguos),
+		ReservasActivas:       reservasActivas,
+		ReservasVendidas:      reservasVendidas,
+		TestDrivesAgendados:   testDrivesAgendados,
 		TestDrivesCompletados: testDrivesCompletados,
-		ConsultasAbiertas:    consultasAbiertas,
-		TotalUsuarios:        totalUsuarios,
+		ConsultasAbiertas:     consultasAbiertas,
+		TotalUsuarios:         totalUsuarios,
 	}, nil
+}
+
+// conDiasEnStock convierte los vehículos con su fecha de alta al DTO del panel
+// calculando la cantidad de días que llevan publicados.
+func conDiasEnStock(vehiculos []repositories.VehiculoConAntiguedad) []repositories.VehiculoEnStock {
+	ahora := time.Now()
+	resultado := make([]repositories.VehiculoEnStock, 0, len(vehiculos))
+	for _, vehiculo := range vehiculos {
+		dias := int(ahora.Sub(vehiculo.CreatedAt).Hours() / 24)
+		if dias < 0 {
+			dias = 0
+		}
+		resultado = append(resultado, repositories.VehiculoEnStock{
+			ID:          vehiculo.ID,
+			Marca:       vehiculo.Marca,
+			Modelo:      vehiculo.Modelo,
+			Anio:        vehiculo.Anio,
+			DiasEnStock: dias,
+		})
+	}
+	return resultado
 }
 
 // interpretarPeriodo devuelve la cantidad de días del período solicitado,
@@ -130,18 +189,18 @@ func inicioPeriodo(dias int) time.Time {
 }
 
 // completarSerie rellena con ceros los días del período que no tienen
-// consultas para que la serie tenga exactamente un registro por día.
-func completarSerie(consultas []repositories.ConsultaPorDia, dias int) []repositories.ConsultaPorDia {
+// eventos para que la serie tenga exactamente un registro por día.
+func completarSerie(consultas []repositories.CantidadPorDia, dias int) []repositories.CantidadPorDia {
 	porDia := make(map[string]int64, len(consultas))
 	for _, consulta := range consultas {
 		porDia[consulta.Fecha] = consulta.Cantidad
 	}
 
 	inicio := inicioPeriodo(dias)
-	serie := make([]repositories.ConsultaPorDia, 0, dias)
+	serie := make([]repositories.CantidadPorDia, 0, dias)
 	for dia := inicio; dia.Before(inicio.AddDate(0, 0, dias)); dia = dia.AddDate(0, 0, 1) {
 		clave := dia.Format("2006-01-02")
-		serie = append(serie, repositories.ConsultaPorDia{Fecha: clave, Cantidad: porDia[clave]})
+		serie = append(serie, repositories.CantidadPorDia{Fecha: clave, Cantidad: porDia[clave]})
 	}
 	return serie
 }

@@ -107,9 +107,11 @@ func (f *fakeVehiculoRepository) DarDeBaja(_ context.Context, _ uint) error {
 }
 
 type fakeTurnoRepository struct {
-	porID       map[uint]*models.TurnoTestDrive
-	superpuesto bool
-	siguiente   uint
+	porID        map[uint]*models.TurnoTestDrive
+	superpuesto  bool
+	clienteDuplic bool
+	ocupadas     []string
+	siguiente    uint
 }
 
 func nuevoFakeTurnoRepository() *fakeTurnoRepository {
@@ -119,14 +121,17 @@ func nuevoFakeTurnoRepository() *fakeTurnoRepository {
 	}
 }
 
-func (f *fakeTurnoRepository) CrearSiSinSuperposicion(_ context.Context, turno *models.TurnoTestDrive) (*models.TurnoTestDrive, bool, error) {
+func (f *fakeTurnoRepository) CrearSiDisponible(_ context.Context, turno *models.TurnoTestDrive) (*models.TurnoTestDrive, error) {
+	if f.clienteDuplic {
+		return nil, repositories.ErrClienteYaTieneTurno
+	}
 	if f.superpuesto {
-		return nil, false, nil
+		return nil, repositories.ErrFranjaOcupada
 	}
 	turno.ID = f.siguiente
 	f.siguiente++
 	f.porID[turno.ID] = turno
-	return turno, true, nil
+	return turno, nil
 }
 
 func (f *fakeTurnoRepository) ObtenerPorID(_ context.Context, id uint) (*models.TurnoTestDrive, error) {
@@ -142,6 +147,10 @@ func (f *fakeTurnoRepository) ListarPorCliente(_ context.Context, _ uint) ([]mod
 
 func (f *fakeTurnoRepository) Listar(_ context.Context, _ string) ([]models.TurnoTestDrive, error) {
 	return nil, nil
+}
+
+func (f *fakeTurnoRepository) Ocupadas(_ context.Context, _ uint, _ string) ([]string, error) {
+	return f.ocupadas, nil
 }
 
 func (f *fakeTurnoRepository) Actualizar(_ context.Context, turno *models.TurnoTestDrive) (*models.TurnoTestDrive, error) {
