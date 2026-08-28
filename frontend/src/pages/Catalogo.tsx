@@ -1,4 +1,5 @@
 import { useDeferredValue, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { FiltrosVehiculos, ResumenVehiculo } from '../types/vehiculo'
 import { EncabezadoPagina } from '../components/ui/EncabezadoPagina'
@@ -12,7 +13,13 @@ import { Boton } from '../components/ui/Boton'
 
 const TAMANO_PAGINA = 12
 
-const TIPOS = ['sedán', 'SUV', 'hatchback', 'pick-up', 'coupe']
+const TIPOS = [
+  { valor: 'sedán', etiqueta: 'Sedán' },
+  { valor: 'suv', etiqueta: 'SUV' },
+  { valor: 'hatchback', etiqueta: 'Hatchback' },
+  { valor: 'pick-up', etiqueta: 'Pick-up' },
+  { valor: 'coupe', etiqueta: 'Coupé' },
+]
 
 const COMBUSTIBLES = ['Nafta', 'Diésel', 'Eléctrico', 'Híbrido', 'GNC']
 
@@ -68,13 +75,27 @@ function aFiltrosConsulta(datos: DatosFiltros): FiltrosVehiculos {
 }
 
 export function Catalogo() {
-  const [datos, setDatos] = useState<DatosFiltros>(filtrosVacios)
+  const [searchParams] = useSearchParams()
+  const [datos, setDatos] = useState<DatosFiltros>(() => {
+    const base = filtrosVacios()
+    const tipo = searchParams.get('tipo')
+    if (tipo) base.tipo = tipo.toLowerCase()
+    return base
+  })
   const busquedaDiferida = useDeferredValue(datos.busqueda)
   const [vehiculos, setVehiculos] = useState<ResumenVehiculo[]>([])
   const [pagina, setPagina] = useState(1)
   const [total, setTotal] = useState(0)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Refleja el tipo elegido desde las tarjetas de la portada (p. ej.
+  // /catalogo?tipo=suv) aunque ya estés dentro del catálogo.
+  useEffect(() => {
+    const tipo = (searchParams.get('tipo') ?? '').toLowerCase()
+    setPagina(1)
+    setDatos((actuales) => (actuales.tipo === tipo ? actuales : { ...actuales, tipo }))
+  }, [searchParams])
 
   useEffect(() => {
     let cancelado = false
@@ -174,8 +195,8 @@ export function Catalogo() {
           >
             <option value="">Todos</option>
             {TIPOS.map((tipo) => (
-              <option key={tipo} value={tipo}>
-                {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
+              <option key={tipo.valor} value={tipo.valor}>
+                {tipo.etiqueta}
               </option>
             ))}
           </CampoSeleccion>

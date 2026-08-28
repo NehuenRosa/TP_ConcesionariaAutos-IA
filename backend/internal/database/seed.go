@@ -105,39 +105,60 @@ var vehiculosPorDefecto = []vehiculoPorDefecto{
 		fotoWikimedia("Ferrari%20Roma%201X7A0309.jpg"),
 		fotoWikimedia("Ferrari%20Roma%20IMG%209620.jpg"),
 	}},
+	{marca: "Toyota", modelo: "Corolla Cross", anio: 2023, kilometraje: 0, combustible: "Nafta", transmision: "Automática", tipo: "suv", precio: 45000000, condicion: models.CondicionNuevo, imagenes: []string{
+		fotoWikimedia("Toyota%20Corolla%20Cross%20Hybrid%201X7A1861.jpg"),
+		fotoWikimedia("Toyota%20Corolla%20Cross%20Hybrid%20Z%20rear.jpg"),
+	}},
+	{marca: "Toyota", modelo: "Hilux SRX", anio: 2022, kilometraje: 25000, combustible: "Diésel", transmision: "Automática", tipo: "pick-up", precio: 62000000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("Toyota%20Hilux%20%2834602333401%29.jpg"),
+		fotoWikimedia("Toyota%20Hilux%20twincab%20%2830733462156%29.jpg"),
+	}},
+	{marca: "Toyota", modelo: "Yaris XLS", anio: 2023, kilometraje: 15000, combustible: "Nafta", transmision: "Automática", tipo: "hatchback", precio: 17000000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("2025%20Toyota%20Yaris%20XLS%2B%20%282nd%20facelift%29%20in%20Argentina.jpg"),
+		fotoWikimedia("2025%20Toyota%20Yaris%20S%201.5.jpg"),
+	}},
+	{marca: "Ford", modelo: "Fiesta Kinetic", anio: 2016, kilometraje: 42000, combustible: "Nafta", transmision: "Manual", tipo: "sedán", precio: 9200000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("2015%20Ford%20Fiesta%20sedan%201.6%20SE%20Plus.jpg"),
+	}},
+	{marca: "Ford", modelo: "Focus Titanium", anio: 2017, kilometraje: 38000, combustible: "Nafta", transmision: "Automática", tipo: "hatchback", precio: 14000000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("2018%20Ford%20Focus%20Titanium%201.0%20%28Front%29.jpg"),
+		fotoWikimedia("2018%20Ford%20Focus%20Titanium%201.0%20%28Rear%29.jpg"),
+	}},
+	{marca: "Volkswagen", modelo: "Gol Trend", anio: 2014, kilometraje: 85000, combustible: "Nafta", transmision: "Manual", tipo: "hatchback", precio: 7500000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("2014%20Volkswagen%20Gol%20Trend%201.6%20Cup.jpg"),
+	}},
+	{marca: "Volkswagen", modelo: "Amarok V6", anio: 2022, kilometraje: 30000, combustible: "Diésel", transmision: "Automática", tipo: "pick-up", precio: 52000000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("Volkswagen%20Amarok%20V6%20TDi%20Extreme%202022.jpg"),
+		fotoWikimedia("2023%20Volkswagen%20Amarok%20Extreme%20V6%204X4.jpg"),
+	}},
+	{marca: "Fiat", modelo: "Pulse Drive", anio: 2022, kilometraje: 0, combustible: "Nafta", transmision: "Automática", tipo: "suv", precio: 22500000, condicion: models.CondicionNuevo, imagenes: []string{
+		fotoWikimedia("2022%20Fiat%20Pulse%201.3%20Drive.jpg"),
+	}},
+	{marca: "Fiat", modelo: "Palio Fire", anio: 2018, kilometraje: 60000, combustible: "Nafta", transmision: "Manual", tipo: "hatchback", precio: 5800000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("Fiat%20Palio%20Fire%202017.jpg"),
+	}},
+	{marca: "Chevrolet", modelo: "Cruze LTZ", anio: 2019, kilometraje: 32000, combustible: "Nafta", transmision: "Automática", tipo: "sedán", precio: 18500000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("CHEVROLET%20CRUZE%20%28J400%29%20China.jpg"),
+		fotoWikimedia("Chevrolet%20Cruze%20%28third%20generation%29%201X7A0417.jpg"),
+	}},
+	{marca: "Chevrolet", modelo: "S10 LTZ", anio: 2021, kilometraje: 45000, combustible: "Diésel", transmision: "Automática", tipo: "pick-up", precio: 39000000, condicion: models.CondicionUsado, imagenes: []string{
+		fotoWikimedia("ChevroletS10-Carilo-06280.jpg"),
+		fotoWikimedia("Chevrolet%20S10%202.4%20MPFI.jpg"),
+	}},
 }
 
 // SembrarVehiculos crea los vehículos por defecto si no existen (idempotente)
 // y completa el campo tipo de los vehículos existentes que aún no lo tienen.
+// Con la base vacía crea todo el catálogo; con datos ya cargados crea los
+// modelos por defecto que falten para que los nuevos vehículos del seed
+// queden disponibles aunque la base ya esté poblada.
 func SembrarVehiculos(base *gorm.DB) error {
 	var total int64
 	if err := base.Model(&models.Vehiculo{}).Count(&total).Error; err != nil {
 		return err
 	}
 	if total == 0 {
-		for _, v := range vehiculosPorDefecto {
-			imagenes := make([]models.Imagen, 0, len(v.imagenes))
-			for _, url := range v.imagenes {
-				imagenes = append(imagenes, models.Imagen{URL: url})
-			}
-			nuevo := models.Vehiculo{
-				Marca:       v.marca,
-				Modelo:      v.modelo,
-				Anio:        v.anio,
-				Kilometraje: v.kilometraje,
-				Combustible: v.combustible,
-				Transmision: v.transmision,
-				Tipo:        v.tipo,
-				Precio:      v.precio,
-				Condicion:   v.condicion,
-				Estado:      models.EstadoDisponible,
-				Imagenes:    imagenes,
-			}
-			if err := base.Create(&nuevo).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		return crearVehiculosPorDefecto(base)
 	}
 
 	for _, v := range vehiculosPorDefecto {
@@ -146,8 +167,54 @@ func SembrarVehiculos(base *gorm.DB) error {
 			Update("tipo", v.tipo).Error; err != nil {
 			return err
 		}
+
+		var totalModelo int64
+		if err := base.Model(&models.Vehiculo{}).
+			Where("marca = ? AND modelo = ?", v.marca, v.modelo).Count(&totalModelo).Error; err != nil {
+			return err
+		}
+		if totalModelo > 0 {
+			continue
+		}
+		nuevo := vehiculoDesdeDefecto(v)
+		if err := base.Create(&nuevo).Error; err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// crearVehiculosPorDefecto inserta todo el catálogo por defecto.
+func crearVehiculosPorDefecto(base *gorm.DB) error {
+	for _, v := range vehiculosPorDefecto {
+		nuevo := vehiculoDesdeDefecto(v)
+		if err := base.Create(&nuevo).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// vehiculoDesdeDefecto arma la entidad Vehiculo a partir del registro por
+// defecto del seed.
+func vehiculoDesdeDefecto(v vehiculoPorDefecto) models.Vehiculo {
+	imagenes := make([]models.Imagen, 0, len(v.imagenes))
+	for _, url := range v.imagenes {
+		imagenes = append(imagenes, models.Imagen{URL: url})
+	}
+	return models.Vehiculo{
+		Marca:       v.marca,
+		Modelo:      v.modelo,
+		Anio:        v.anio,
+		Kilometraje: v.kilometraje,
+		Combustible: v.combustible,
+		Transmision: v.transmision,
+		Tipo:        v.tipo,
+		Precio:      v.precio,
+		Condicion:   v.condicion,
+		Estado:      models.EstadoDisponible,
+		Imagenes:    imagenes,
+	}
 }
 
 // SembrarUsuarios crea los usuarios por defecto si no existen (idempotente).
