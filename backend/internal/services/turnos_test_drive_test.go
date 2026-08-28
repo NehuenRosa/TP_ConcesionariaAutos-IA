@@ -101,6 +101,19 @@ func TestSolicitarSuperpuesto(t *testing.T) {
 	}
 }
 
+func TestSolicitarClienteYaTieneTurnoDelMismoVehiculo(t *testing.T) {
+	vehiculos := nuevoFakeVehiculoRepository()
+	vehiculos.porID[1] = vehiculoDisponible(1)
+	turnos := nuevoFakeTurnoRepository()
+	turnos.clienteDuplic = true
+	servicio := NuevoTurnoTestDriveService(turnos, vehiculos)
+
+	_, err := servicio.Solicitar(context.Background(), 7, 1, fechaDeManana(), "14:00")
+	if !errors.Is(err, ErrTurnoDuplicadoVehiculo) {
+		t.Errorf("se esperaba ErrTurnoDuplicadoVehiculo, se obtuvo %v", err)
+	}
+}
+
 func TestSolicitarFranjaDeHoyYaComenzada(t *testing.T) {
 	vehiculos := nuevoFakeVehiculoRepository()
 	vehiculos.porID[1] = vehiculoDisponible(1)
@@ -292,7 +305,7 @@ func TestListarSinFiltroYConFiltroValido(t *testing.T) {
 func TestFranjas(t *testing.T) {
 	servicio := NuevoTurnoTestDriveService(nuevoFakeTurnoRepository(), nuevoFakeVehiculoRepository())
 	franjas := servicio.Franjas()
-	esperadas := 7
+	esperadas := 12
 	if len(franjas) != esperadas {
 		t.Fatalf("se esperaban %d franjas, hay %d", esperadas, len(franjas))
 	}
@@ -305,7 +318,7 @@ func TestFranjas(t *testing.T) {
 			t.Errorf("la franja %q tiene inicio inválido %q", franja.ID, franja.Inicio)
 			continue
 		}
-		if fin := inicio.Add(time.Hour).Format("15:04"); fin != franja.Fin {
+		if fin := inicio.Add(30 * time.Minute).Format("15:04"); fin != franja.Fin {
 			t.Errorf("la franja %q debería terminar a las %s, termina a las %s", franja.ID, fin, franja.Fin)
 		}
 	}
@@ -314,6 +327,50 @@ func TestFranjas(t *testing.T) {
 	}
 	if !models.FranjaValida("10:00") {
 		t.Error("'10:00' debería ser una franja válida")
+	}
+	if !models.FranjaValida("10:30") {
+		t.Error("'10:30' debería ser una franja válida")
+	}
+}
+
+func TestFranjasConDisponibilidadMarcaOcupadas(t *testing.T) {
+	turnos := nuevoFakeTurnoRepository()
+	turnos.ocupadas = []string{"10:00", "16:30"}
+	servicio := NuevoTurnoTestDriveService(turnos, nuevoFakeVehiculoRepository())
+
+	franjas, err := servicio.FranjasConDisponibilidad(context.Background(), 1, fechaDeManana())
+	if err != nil {
+		t.Fatalf("FranjasConDisponibilidad devolvió error: %v", err)
+	}
+	porID := make(map[string]models.FranjaHoraria, len(franjas))
+	for _, f := range franjas {
+		porID[f.ID] = f
+	}
+	if !porID["10:00"].Ocupada {
+		t.Error("'10:00' debería estar marcada como ocupada")
+	}
+	if !porID["16:30"].Ocupada {
+		t.Error("'16:30' debería estar marcada como ocupada")
+	}
+	if porID["09:00"].Ocupada {
+		t.Error("'09:00' no debería estar marcada como ocupada")
+	}
+	if porID["10:30"].Ocupada {
+		t.Error("'10:30' no debería estar marcada como ocupada")
+	}
+}
+
+func TestFranjasConDisponibilidadSinParametrosDevuelveTodo(t *testing.T) {
+	servicio := NuevoTurnoTestDriveService(nuevoFakeTurnoRepository(), nuevoFakeVehiculoRepository())
+
+	franjas, err := servicio.FranjasConDisponibilidad(context.Background(), 0, "")
+	if err != nil {
+		t.Fatalf("FranjasConDisponibilidad devolvió error: %v", err)
+	}
+	for _, f := range franjas {
+		if f.Ocupada {
+			t.Errorf("la franja %q no debería estar ocupada sin parámetros", f.ID)
+		}
 	}
 }
 

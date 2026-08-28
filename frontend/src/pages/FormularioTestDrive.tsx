@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import type { Vehiculo } from '../types/vehiculo'
-import type { FranjaHoraria } from '../types/testDrive'
+import type { FranjaHoraria, TurnoTestDrive } from '../types/testDrive'
 import { Boton } from '../components/ui/Boton'
 import { CampoTexto } from '../components/ui/Campo'
 import { ContenidoCargando } from '../components/ui/Spinner'
@@ -24,6 +24,18 @@ function franjaEnPasado(fecha: string, franja: FranjaHoraria): boolean {
   return comienzo.getTime() <= Date.now()
 }
 
+// turnoPendienteDelVehiculo encuentra un turno activo (solicitado o
+// confirmado) del cliente para el vehículo dado.
+function turnoPendienteDelVehiculo(turnos: TurnoTestDrive[], vehiculoId: number): TurnoTestDrive | null {
+  return (
+    turnos.find(
+      (t) =>
+        t.vehiculo.id === vehiculoId &&
+        (t.estado === 'solicitado' || t.estado === 'confirmado'),
+    ) ?? null
+  )
+}
+
 export function FormularioTestDrive() {
   const { id } = useParams<{ id: string }>()
   const [vehiculo, setVehiculo] = useState<Vehiculo | null>(null)
@@ -32,6 +44,8 @@ export function FormularioTestDrive() {
   const [franja, setFranja] = useState('')
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [errorFranjas, setErrorFranjas] = useState<string | null>(null)
+  const [turnoPendiente, setTurnoPendiente] = useState<TurnoTestDrive | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const [turnoCreado, setTurnoCreado] = useState(false)
@@ -41,11 +55,16 @@ export function FormularioTestDrive() {
     if (!id) return
     let cancelado = false
 
-    Promise.all([api.obtenerVehiculo(Number(id)), api.obtenerFranjas()])
-      .then(([dato, franjasDisponibles]) => {
+    Promise.all([
+      api.obtenerVehiculo(Number(id)),
+      // Si el pedido de turnos propios falla (ej. visitante sin sesión), se
+      // ignora: la validación definitiva la hace el backend al enviar.
+      api.listarMisTestDrives().catch(() => [] as TurnoTestDrive[]),
+    ])
+      .then(([dato, misTurnos]) => {
         if (cancelado) return
         setVehiculo(dato)
-        setFranjas(franjasDisponibles)
+        setTurnoPendiente(turnoPendienteDelVehiculo(misTurnos, dato.id))
       })
       .catch((e: unknown) => {
         if (cancelado) return
@@ -59,6 +78,28 @@ export function FormularioTestDrive() {
       cancelado = true
     }
   }, [id])
+
+  useEffect(() => {
+    if (!id || !fecha) return
+    let cancelado = false
+
+    api
+      .obtenerFranjas(Number(id), fecha)
+      .then((disponibles) => {
+        if (cancelado) return
+        setFranjas(disponibles)
+        setErrorFranjas(null)
+        setFranja((actual) => (actual && disponibles.find((f) => f.id === actual)?.ocupada ? '' : actual))
+      })
+      .catch((e: unknown) => {
+        if (cancelado) return
+        setErrorFranjas(e instanceof ErrorApi ? e.message : 'No se pudieron obtener los horarios del test drive.')
+      })
+
+    return () => {
+      cancelado = true
+    }
+  }, [id, fecha])
 
   const handleSolicitar = async () => {
     if (!vehiculo || !fecha || !franja || enviandoRef.current) return
@@ -173,14 +214,29 @@ export function FormularioTestDrive() {
             disabled={enviando}
           />
 
+          {turnoPendiente && (
+            <div
+              role="alert"
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200"
+            >
+              Ya tenés un test drive pendiente para este vehículo (
+              {turnoPendiente.fecha} a las {turnoPendiente.franja} hs). Podés cancelarlo desde{' '}
+              <Link to="/mis-test-drives" className="font-medium underline">
+                Mis test drives
+              </Link>
+              .
+            </div>
+          )}
+
           <div>
             <span className="etiqueta">Hora del turno</span>
             <p className="mt-1 text-xs text-plata-500">
-              Elegí la hora exacta a la que querés la prueba de manejo.
+              Los turnos duran media hora; los horarios ya reservados aparecen en rojo.
             </p>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
               {franjas.map((f) => {
                 const enPasado = franjaEnPasado(fecha, f)
+                const ocupada = f.ocupada === true
                 const seleccionada = franja === f.id
                 return (
                   <button
@@ -190,26 +246,39 @@ export function FormularioTestDrive() {
                       setFranja(f.id)
                       setErrorEnvio(null)
                     }}
-                    disabled={enPasado || enviando}
+                    disabled={enPasado || ocupada || enviando}
                     aria-pressed={seleccionada}
+                    aria-label={`${f.inicio} a ${f.fin}${ocupada ? ' (ocupado)' : ''}`}
                     className={`rounded-xl border px-3 py-3 text-center transition ${
                       enPasado
                         ? 'cursor-not-allowed border-white/5 bg-carbono-900/30 text-plata-600 opacity-50'
-                        : seleccionada
-                          ? 'border-acento-400/60 bg-acento-400/10 text-acento-300 shadow-resaltado'
-                          : 'border-white/8 bg-carbono-900/50 text-plata-100 hover:border-white/20'
+                        : ocupada
+                          ? 'cursor-not-allowed border-rose-500/40 bg-rose-500/10 text-plata-500'
+                          : seleccionada
+                            ? 'border-acento-400/60 bg-acento-400/10 text-acento-300 shadow-resaltado'
+                            : 'border-white/8 bg-carbono-900/50 text-plata-100 hover:border-white/20'
                     }`}
                   >
                     <span className="texto-numerico block font-display text-sm font-semibold">
                       {f.inicio}
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-plata-500">
-                      {f.inicio} – {f.fin} hs
-                    </span>
+                    {ocupada ? (
+                      <span className="mt-0.5 block text-[11px] font-medium text-rose-400">Ocupado</span>
+                    ) : (
+                      <span className="mt-0.5 block text-[11px] text-plata-500">
+                        {f.inicio} – {f.fin} hs
+                      </span>
+                    )}
                   </button>
                 )
               })}
             </div>
+            {franjas.some((f) => f.ocupada) && (
+              <p className="mt-2 text-xs text-rose-300/80">
+                Los horarios en rojo ya tienen un turno reservado para esa fecha.
+              </p>
+            )}
+            {errorFranjas && <p className="mt-2 text-xs text-red-300">{errorFranjas}</p>}
             {franjas.length === 0 && (
               <p className="mt-2 text-sm text-plata-500">No hay horarios disponibles por el momento.</p>
             )}
@@ -225,10 +294,15 @@ export function FormularioTestDrive() {
             tamano="lg"
             className="w-full"
             onClick={handleSolicitar}
-            disabled={enviando || !fecha || !franja}
+            disabled={enviando || !fecha || !franja || !!turnoPendiente}
           >
-            {enviando ? 'Solicitando…' : 'Solicitar test drive'}
+            {enviando ? 'Solicitando…' : turnoPendiente ? 'Ya tenés un turno pendiente' : 'Solicitar test drive'}
           </Boton>
+          {turnoPendiente && (
+            <p className="text-center text-xs text-plata-500">
+              Esperá a que completen o cancelen tu turno vigente para pedir otro.
+            </p>
+          )}
           {!franja && (
             <p className="text-center text-xs text-plata-500">
               Seleccioná una hora para habilitar la solicitud.
