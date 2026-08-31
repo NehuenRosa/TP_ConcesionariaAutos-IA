@@ -29,7 +29,7 @@ en español).
 
 ## Endpoints (públicos, sin autenticación)
 
-- `POST /api/chatbot/mensajes` — body `{"mensaje": "...", "historial": [{"rol": "usuario|asistente", "contenido": "..."}]}`. Máx. 1000 caracteres por mensaje y 20 turnos de historial. Respuesta `{"respuesta": "..."}`.
+- `POST /api/chatbot/mensajes` — body `{"mensaje": "...", "historial": [{"rol": "usuario|asistente", "contenido": "..."}]}`. Máx. 1000 caracteres por mensaje y 10 turnos de historial. Respuesta `{"respuesta": "..."}`.
 - `POST /api/chatbot/tasacion` — multipart/form-data: hasta 5 fotos (JPG/JPEG/PNG/WebP, máx. 5 MB cada una) + `descripcion` opcional. Requiere al menos una foto o una descripción (`400` si viene vacío). Respuesta `{"respuesta": "..."}`.
 
 ## Flujo de tasación (NO cambiar)
@@ -66,10 +66,13 @@ código con la referencia oficial. Un cambio de prompt NO debe alterar esto.
 
 ## Límites y constantes clave
 
-`LargoMaximoMensaje = 1000`, `MaximoTurnosHistorial = 20`,
+`LargoMaximoMensaje = 1000`, `MaximoTurnosHistorial = 10`,
 `MaximoImagenesTasacion = 5`, `MaximoPesoImagenBytes = 5 MiB`,
 `TimeoutChatbot = TimeoutVision = 120 s`, `NumCtxChatbot = 4096`,
-`NumCtxVision = 2048`. En el frontend: `TIEMPO_MAXIMO_MILISEGUNDOS = 140000` y
+`NumCtxVision = 2048`. El historial que se reenvía al LLM se recorta a los
+últimos 10 turnos (`aTurnosChat` no aplica domador) tanto en el backend como en
+el widget (`MAX_TURNOS_HISTORIAL = 10` en `Chatbot.tsx`). En el frontend:
+`TIEMPO_MAXIMO_MILISEGUNDOS = 140000` y
 `EXTENSIONES_PERMITIDAS = ['jpg', 'jpeg', 'png', 'webp']` (se acepta por
 extensión aunque el MIME venga vacío).
 

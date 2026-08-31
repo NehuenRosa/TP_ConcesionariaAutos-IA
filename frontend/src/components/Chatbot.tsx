@@ -6,6 +6,7 @@ import { Boton } from './ui/Boton'
 
 const MAXIMO_FOTOS = 5
 const TAMANO_MAXIMO_MB = 5
+const MAX_TURNOS_HISTORIAL = 10
 const FORMATOS_PERMITIDOS = ['image/jpeg', 'image/png', 'image/webp']
 const EXTENSIONES_PERMITIDAS = ['jpg', 'jpeg', 'png', 'webp']
 
@@ -100,10 +101,15 @@ export function Chatbot() {
     setMensajesConsulta((m) => [...m, { rol: 'usuario', contenido: mensaje }])
 
     try {
-      const historial = mensajesConsulta.map((turno) => ({
-        rol: turno.rol,
-        contenido: turno.contenido,
-      }))
+      // Al LLM solo se le reenvía la memoria corta (últimos turnos): el
+      // historial completo queda en pantalla y en la base, pero el modelo no
+      // necesita la conversación entera para responder.
+      const historial = mensajesConsulta
+        .slice(-MAX_TURNOS_HISTORIAL)
+        .map((turno) => ({
+          rol: turno.rol,
+          contenido: turno.contenido,
+        }))
       const respuesta = await api.enviarMensajeChatbot({ mensaje, historial })
       setMensajesConsulta((m) => [
         ...m,
