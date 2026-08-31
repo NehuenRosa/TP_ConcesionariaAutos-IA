@@ -116,12 +116,14 @@ export function BandejaCotizaciones() {
       ) : (
         <div className="mt-8 space-y-3">
           {filtradas.map((cotizacion) => (
-            <Link
+            <div
               key={cotizacion.id}
-              to={`/vendedor/cotizaciones/${cotizacion.id}`}
               className="flex items-center justify-between gap-4 rounded-xl border border-white/8 bg-carbono-850/60 p-4 shadow-luz backdrop-blur-sm transition-colors hover:border-acento-400/40 hover:bg-carbono-800/60"
             >
-              <div className="min-w-0 flex-1">
+              <Link
+                to={`/vendedor/cotizaciones/${cotizacion.id}`}
+                className="min-w-0 flex-1"
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-medium text-plata-100">
                     {cotizacion.cliente?.nombre ?? 'Cliente'}
@@ -136,11 +138,19 @@ export function BandejaCotizaciones() {
                   {cotizacion.ultimoMensaje?.contenido ?? 'Sin mensajes'}
                 </p>
                 <p className="mt-1 text-xs text-acento-400">{etiquetaAtencion(cotizacion)}</p>
+              </Link>
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <p className="texto-numerico text-sm font-medium text-plata-200">
+                  {formatearPrecio(cotizacion.vehiculo.precio)}
+                </p>
+                <Link
+                  to={`/catalogo/${cotizacion.vehiculo.id}`}
+                  className="text-xs font-semibold text-acento-400 transition-colors hover:text-acento-300"
+                >
+                  Ver ficha
+                </Link>
               </div>
-              <p className="shrink-0 texto-numerico text-sm font-medium text-plata-200">
-                {formatearPrecio(cotizacion.vehiculo.precio)}
-              </p>
-            </Link>
+            </div>
           ))}
         </div>
       )}

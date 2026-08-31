@@ -5,6 +5,7 @@ export function useNotificaciones(autenticado: boolean) {
   const [cantidadConsultas, setCantidadConsultas] = useState(0)
   const [cantidadCotizaciones, setCantidadCotizaciones] = useState(0)
   const [nuevoAviso, setNuevoAviso] = useState(false)
+  const [canalAviso, setCanalAviso] = useState<'consultas' | 'cotizaciones' | null>(null)
   const anterioresRef = useRef({ consultas: 0, cotizaciones: 0 })
   const inicializadoRef = useRef(false)
 
@@ -12,13 +13,19 @@ export function useNotificaciones(autenticado: boolean) {
     try {
       const resultado = await api.obtenerContadorNotificaciones()
       if (inicializadoRef.current) {
-        const subio =
-          resultado.consultas > anterioresRef.current.consultas ||
-          resultado.cotizaciones > anterioresRef.current.cotizaciones
-        if (subio) setNuevoAviso(true)
+        const subioConsultas = resultado.consultas > anterioresRef.current.consultas
+        const subioCotizaciones = resultado.cotizaciones > anterioresRef.current.cotizaciones
+        const subio = subioConsultas || subioCotizaciones
+        if (subio) {
+          setNuevoAviso(true)
+          // Si subió solo el canal de cotizaciones, el aviso apunta ahí para
+          // que el usuario aterrice en la bandeja correcta al tocar "Ver".
+          setCanalAviso(subioCotizaciones && !subioConsultas ? 'cotizaciones' : 'consultas')
+        }
       }
       if (resultado.consultas === 0 && resultado.cotizaciones === 0) {
         setNuevoAviso(false)
+        setCanalAviso(null)
       }
       inicializadoRef.current = true
       anterioresRef.current = { consultas: resultado.consultas, cotizaciones: resultado.cotizaciones }
@@ -49,5 +56,5 @@ export function useNotificaciones(autenticado: boolean) {
     }
   }, [autenticado, verificar])
 
-  return { cantidadConsultas, cantidadCotizaciones, nuevoAviso, descartarAviso }
+  return { cantidadConsultas, cantidadCotizaciones, nuevoAviso, canalAviso, descartarAviso }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet } from 'react-router'
+import { Link, NavLink, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useNotificaciones } from '../hooks/useNotificaciones'
 import { Boton } from '../components/ui/Boton'
@@ -22,14 +22,27 @@ function Marca() {
 
 export function LayoutBase() {
   const { usuario, cargando, cerrarSesion, esAdministrador } = useAuth()
+  const ubicacion = useLocation()
   const esCliente = usuario?.rol === 'cliente'
   const esVendedor = usuario?.rol === 'vendedor'
-  const { cantidadConsultas, cantidadCotizaciones, nuevoAviso, descartarAviso } = useNotificaciones(
-    !cargando && !!usuario,
-  )
+  const { cantidadConsultas, cantidadCotizaciones, nuevoAviso, canalAviso, descartarAviso } =
+    useNotificaciones(!cargando && !!usuario)
   const [menuAbierto, setMenuAbierto] = useState(false)
 
-  const destinoMensajes = esCliente ? '/mis-consultas' : '/vendedor/bandeja'
+  // Al navegar a otra página, la barra de scroll vuelve al inicio.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [ubicacion.pathname, ubicacion.search])
+
+  // destinoMensajes apunta a la bandeja que corresponde según el rol y el
+  // canal que generó el aviso (respuesta de vendedor o de la IA).
+  const destinoMensajes = esCliente
+    ? canalAviso === 'cotizaciones'
+      ? '/mis-cotizaciones'
+      : '/mis-consultas'
+    : canalAviso === 'cotizaciones'
+      ? '/vendedor/cotizaciones'
+      : '/vendedor/bandeja'
 
   useEffect(() => {
     if (!nuevoAviso) return
