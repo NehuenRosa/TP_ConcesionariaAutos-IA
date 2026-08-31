@@ -40,6 +40,10 @@ type TurnoTestDriveService interface {
 	ListarMisTurnos(ctx context.Context, clienteID uint) ([]models.TurnoTestDrive, error)
 	// Cancelar cancela un turno propio en estado solicitado o confirmado.
 	Cancelar(ctx context.Context, turnoID uint, clienteID uint) (*models.TurnoTestDrive, error)
+	// Eliminar aplica la baja lógica de un turno propio para que el cliente no
+	// lo vea más en su listado. Si el turno está activo, primero lo cancela
+	// (libera la franja) y después lo marca como borrado.
+	Eliminar(ctx context.Context, turnoID uint, clienteID uint) (*models.TurnoTestDrive, error)
 	// Listar lista los turnos para el vendedor, con filtro de estado opcional.
 	Listar(ctx context.Context, estado string) ([]models.TurnoTestDrive, error)
 	// Confirmar confirma un turno solicitado.
@@ -144,7 +148,26 @@ func (s *turnoTestDriveService) Cancelar(ctx context.Context, turnoID uint, clie
 	return s.repositorio.Actualizar(ctx, turno)
 }
 
-// Listar lista los turnos para el vendedor con filtro de estado opcional.
+// Eliminar aplica la baja lógica de un turno propio: lo quita del listado del
+// cliente (BorradoPorCliente). Si el turno estaba activo, lo cancela primero
+// para liberar la franja. Los turnos ajenos se tratan como inexistentes.
+func (s *turnoTestDriveService) Eliminar(ctx context.Context, turnoID uint, clienteID uint) (*models.TurnoTestDrive, error) {
+	turno, err := s.repositorio.ObtenerPorID(ctx, turnoID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrTurnoNoEncontrado
+		}
+		return nil, fmt.Errorf("obtener turno: %w", err)
+	}
+	if turno.ClienteID != clienteID {
+		return nil, ErrTurnoNoEncontrado
+	}
+	if turno.EsActivo() {
+		turno.Estado = models.EstadoTurnoCancelado
+	}
+	turno.BorradoPorCliente = true
+	return s.repositorio.Actualizar(ctx, turno)
+}
 func (s *turnoTestDriveService) Listar(ctx context.Context, estado string) ([]models.TurnoTestDrive, error) {
 	if estado != "" && !esEstadoTurnoValido(estado) {
 		return nil, ErrFiltroEstadoTurnoInvalido

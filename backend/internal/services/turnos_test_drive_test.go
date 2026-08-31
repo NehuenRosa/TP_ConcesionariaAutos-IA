@@ -220,6 +220,68 @@ func TestCancelarTurnoInexistente(t *testing.T) {
 	}
 }
 
+func TestEliminarTurnoPropioActivoCancelaYOculta(t *testing.T) {
+	turnos := nuevoFakeTurnoRepository()
+	turnos.porID[1] = &models.TurnoTestDrive{
+		ID: 1, VehiculoID: 1, ClienteID: 7, Fecha: fechaDeManana(), Franja: "10:00",
+		Estado: models.EstadoTurnoSolicitado,
+	}
+	servicio := NuevoTurnoTestDriveService(turnos, nuevoFakeVehiculoRepository())
+
+	eliminado, err := servicio.Eliminar(context.Background(), 1, 7)
+	if err != nil {
+		t.Fatalf("Eliminar devolvió error: %v", err)
+	}
+	if !eliminado.BorradoPorCliente {
+		t.Error("el turno debería quedar marcado como borrado por el cliente")
+	}
+	if eliminado.Estado != models.EstadoTurnoCancelado {
+		t.Errorf("un turno activo debería cancelarse al eliminarlo, estado %q", eliminado.Estado)
+	}
+}
+
+func TestEliminarTurnoPropioInactivoSoloOculta(t *testing.T) {
+	turnos := nuevoFakeTurnoRepository()
+	turnos.porID[1] = &models.TurnoTestDrive{
+		ID: 1, VehiculoID: 1, ClienteID: 7, Fecha: fechaDeManana(), Franja: "10:00",
+		Estado: models.EstadoTurnoCompletado,
+	}
+	servicio := NuevoTurnoTestDriveService(turnos, nuevoFakeVehiculoRepository())
+
+	eliminado, err := servicio.Eliminar(context.Background(), 1, 7)
+	if err != nil {
+		t.Fatalf("Eliminar devolvió error: %v", err)
+	}
+	if !eliminado.BorradoPorCliente {
+		t.Error("el turno debería quedar marcado como borrado por el cliente")
+	}
+	if eliminado.Estado != models.EstadoTurnoCompletado {
+		t.Errorf("un turno inactivo no debería cambiar de estado, estado %q", eliminado.Estado)
+	}
+}
+
+func TestEliminarTurnoAjenoSeTrataComoInexistente(t *testing.T) {
+	turnos := nuevoFakeTurnoRepository()
+	turnos.porID[1] = &models.TurnoTestDrive{
+		ID: 1, VehiculoID: 1, ClienteID: 7, Fecha: fechaDeManana(), Franja: "10:00",
+		Estado: models.EstadoTurnoSolicitado,
+	}
+	servicio := NuevoTurnoTestDriveService(turnos, nuevoFakeVehiculoRepository())
+
+	_, err := servicio.Eliminar(context.Background(), 1, 8)
+	if !errors.Is(err, ErrTurnoNoEncontrado) {
+		t.Errorf("se esperaba ErrTurnoNoEncontrado, se obtuvo %v", err)
+	}
+}
+
+func TestEliminarTurnoInexistente(t *testing.T) {
+	servicio := NuevoTurnoTestDriveService(nuevoFakeTurnoRepository(), nuevoFakeVehiculoRepository())
+	_, err := servicio.Eliminar(context.Background(), 99, 7)
+	if !errors.Is(err, ErrTurnoNoEncontrado) {
+		t.Errorf("se esperaba ErrTurnoNoEncontrado, se obtuvo %v", err)
+	}
+}
+
 func TestConfirmarExitoso(t *testing.T) {
 	turnos := nuevoFakeTurnoRepository()
 	turnos.porID[1] = &models.TurnoTestDrive{ID: 1, Estado: models.EstadoTurnoSolicitado}

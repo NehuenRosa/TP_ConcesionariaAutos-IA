@@ -55,16 +55,17 @@ func FranjaValida(franja string) bool {
 // TurnoTestDrive es la entidad de GORM que representa un turno de prueba de
 // manejo solicitado por un cliente para un vehículo.
 type TurnoTestDrive struct {
-	ID         uint      `gorm:"primaryKey" json:"id"`
-	VehiculoID uint      `gorm:"not null;index" json:"vehiculoId"`
-	Vehiculo   Vehiculo  `gorm:"foreignKey:VehiculoID" json:"-"`
-	ClienteID  uint      `gorm:"not null;index" json:"clienteId"`
-	Cliente    Usuario   `gorm:"foreignKey:ClienteID" json:"-"`
-	Fecha      string    `gorm:"type:date;not null;index" json:"fecha"`
-	Franja     string    `gorm:"not null" json:"franja"`
-	Estado     string    `gorm:"not null;index;default:solicitado" json:"estado"`
-	CreatedAt  time.Time `json:"-"`
-	UpdatedAt  time.Time `json:"-"`
+	ID                 uint      `gorm:"primaryKey" json:"id"`
+	VehiculoID         uint      `gorm:"not null;index" json:"vehiculoId"`
+	Vehiculo           Vehiculo  `gorm:"foreignKey:VehiculoID" json:"-"`
+	ClienteID          uint      `gorm:"not null;index" json:"clienteId"`
+	Cliente            Usuario   `gorm:"foreignKey:ClienteID" json:"-"`
+	Fecha              string    `gorm:"type:date;not null;index" json:"fecha"`
+	Franja             string    `gorm:"not null" json:"franja"`
+	Estado             string    `gorm:"not null;index;default:solicitado" json:"estado"`
+	BorradoPorCliente  bool      `gorm:"default:false;index" json:"borradoPorCliente"`
+	CreatedAt          time.Time `json:"-"`
+	UpdatedAt          time.Time `json:"-"`
 }
 
 // TableName define el nombre de la tabla en español.
