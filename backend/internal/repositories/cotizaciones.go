@@ -17,6 +17,17 @@ type CotizacionRepository interface {
 	AgregarMensaje(ctx context.Context, mensaje *models.MensajeCotizacion) error
 	// ObtenerPorID devuelve la cotización con su vehículo, cliente y mensajes.
 	ObtenerPorID(ctx context.Context, id uint) (*models.Cotizacion, error)
+	// ObtenerCabecera devuelve la cotización con vehículo, cliente y vendedor,
+	// sin cargar los mensajes. Sirve para validar la propiedad de un hilo y
+	// conocer su estado, vendedor y fecha de toma sin traer el historial
+	// completo.
+	ObtenerCabecera(ctx context.Context, id uint) (*models.Cotizacion, error)
+	// ObtenerMensajesDesde devuelve los mensajes de una cotización con id mayor
+	// al indicado, ordenados cronológicamente. Es el mecanismo para traer en el
+	// polling solo lo nuevo (ver docs/roadmap.md "Escalabilidad de conversaciones").
+	ObtenerMensajesDesde(ctx context.Context, cotizacionID uint, desdeID uint) ([]models.MensajeCotizacion, error)
+	// ContarMensajes cuenta el total de mensajes de una cotización.
+	ContarMensajes(ctx context.Context, cotizacionID uint) (int64, error)
 	// ListarPorCliente devuelve las cotizaciones de un cliente, ordenadas por
 	// fecha de actualización descendente, con su vehículo y último mensaje.
 	ListarPorCliente(ctx context.Context, clienteID uint) ([]models.Cotizacion, error)
@@ -26,8 +37,8 @@ type CotizacionRepository interface {
 	ListarBandeja(ctx context.Context) ([]models.Cotizacion, error)
 	// Actualizar guarda los cambios de la cotización (por ejemplo, su estado).
 	Actualizar(ctx context.Context, cotizacion *models.Cotizacion) error
-	// ContarNoLeidosDeCliente cuenta los mensajes de vendedor sin leer en las
-	// cotizaciones del cliente indicado.
+	// ContarNoLeidosDeCliente cuenta los mensajes de la IA y del vendedor sin
+	// leer en las cotizaciones del cliente indicado.
 	ContarNoLeidosDeCliente(ctx context.Context, clienteID uint) (int64, error)
 	// ContarNoLeidosParaPersonal cuenta los mensajes de cliente sin leer en
 	// cotizaciones abiertas sin asignar o asignadas al vendedor indicado.
@@ -104,6 +115,49 @@ func (r *cotizacionRepository) ObtenerPorID(ctx context.Context, id uint) (*mode
 	return &cotizacion, nil
 }
 
+// ObtenerCabecera devuelve la cotización con vehículo, cliente y vendedor,
+// sin cargar los mensajes. Sirve para validar la propiedad de un hilo y
+// conocer su estado, vendedor y fecha de toma sin traer el historial completo.
+func (r *cotizacionRepository) ObtenerCabecera(ctx context.Context, id uint) (*models.Cotizacion, error) {
+	var cotizacion models.Cotizacion
+	err := r.base.WithContext(ctx).
+		Preload("Vehiculo").
+		Preload("Cliente").
+		Preload("Vendedor").
+		First(&cotizacion, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &cotizacion, nil
+}
+
+// ObtenerMensajesDesde devuelve los mensajes de una cotización con id mayor al
+// indicado, ordenados cronológicamente.
+func (r *cotizacionRepository) ObtenerMensajesDesde(ctx context.Context, cotizacionID uint, desdeID uint) ([]models.MensajeCotizacion, error) {
+	var mensajes []models.MensajeCotizacion
+	err := r.base.WithContext(ctx).
+		Where("cotizacion_id = ? AND id > ?", cotizacionID, desdeID).
+		Order("id ASC").
+		Find(&mensajes).Error
+	if err != nil {
+		return nil, fmt.Errorf("obtener mensajes nuevos de cotización: %w", err)
+	}
+	return mensajes, nil
+}
+
+// ContarMensajes cuenta el total de mensajes de una cotización.
+func (r *cotizacionRepository) ContarMensajes(ctx context.Context, cotizacionID uint) (int64, error) {
+	var total int64
+	err := r.base.WithContext(ctx).
+		Model(&models.MensajeCotizacion{}).
+		Where("cotizacion_id = ?", cotizacionID).
+		Count(&total).Error
+	if err != nil {
+		return 0, fmt.Errorf("contar mensajes de cotización: %w", err)
+	}
+	return total, nil
+}
+
 // ListarPorCliente devuelve las cotizaciones de un cliente con su vehículo y
 // el último mensaje, ordenadas por fecha de actualización descendente.
 func (r *cotizacionRepository) ListarPorCliente(ctx context.Context, clienteID uint) ([]models.Cotizacion, error) {
@@ -157,17 +211,18 @@ func (r *cotizacionRepository) Actualizar(ctx context.Context, cotizacion *model
 	return nil
 }
 
-// ContarNoLeidosDeCliente cuenta los mensajes de vendedor sin leer en las
-// cotizaciones del cliente. Los mensajes de la IA no cuentan: su respuesta
-// llega sincrónica en el mismo request.
+// ContarNoLeidosDeCliente cuenta los mensajes de la IA y del vendedor sin
+// leer en las cotizaciones del cliente: una respuesta del asistente que aún no
+// se abrió (o que llegó mientras el cliente estaba en otra pestaña) también
+// debe avisarse, igual que una respuesta de un vendedor.
 func (r *cotizacionRepository) ContarNoLeidosDeCliente(ctx context.Context, clienteID uint) (int64, error) {
 	var total int64
 	err := r.base.WithContext(ctx).
 		Model(&models.MensajeCotizacion{}).
 		Joins("JOIN cotizaciones ON cotizaciones.id = cotizacion_mensajes.cotizacion_id").
 		Where(
-			"cotizaciones.cliente_id = ? AND cotizacion_mensajes.remitente = ? AND cotizacion_mensajes.leido_por_cliente = ?",
-			clienteID, models.RemitenteVendedor, false,
+			"cotizaciones.cliente_id = ? AND cotizacion_mensajes.remitente <> ? AND cotizacion_mensajes.leido_por_cliente = ?",
+			clienteID, models.RemitenteCliente, false,
 		).
 		Count(&total).Error
 	if err != nil {

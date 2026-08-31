@@ -67,11 +67,21 @@ func TestCotizacionCrear(t *testing.T) {
 		t.Error("el orden de remitentes debería ser cliente y luego IA")
 	}
 
+	// La respuesta HTTP (lo que devuelve el servicio) no debe exponer el texto
+	// cifrado: los mensajes viajan descifrados.
+	if cotizacion.Mensajes[0].Contenido != "Hola, quiero cotizar este vehículo." {
+		t.Errorf("el mensaje del cliente debería devolverse descifrado: %q", cotizacion.Mensajes[0].Contenido)
+	}
+	if cotizacion.Mensajes[1].Contenido != "Respuesta para: Hola, quiero cotizar este vehículo." {
+		t.Errorf("la respuesta de la IA debería devolverse descifrada: %q", cotizacion.Mensajes[1].Contenido)
+	}
+
 	// El contenido debe guardarse cifrado en la base.
-	if cotizacion.Mensajes[0].Contenido == "Hola, quiero cotizar este vehículo." {
+	guardada := repoCotizaciones.porID[cotizacion.ID]
+	if guardada.Mensajes[0].Contenido == "Hola, quiero cotizar este vehículo." {
 		t.Error("el mensaje del cliente se guardó en claro, debería estar cifrado")
 	}
-	if cotizacion.Mensajes[1].Contenido == "Respuesta para: Hola, quiero cotizar este vehículo." {
+	if guardada.Mensajes[1].Contenido == "Respuesta para: Hola, quiero cotizar este vehículo." {
 		t.Error("la respuesta de la IA se guardó en claro, debería estar cifrada")
 	}
 
@@ -189,10 +199,48 @@ func TestCotizacionCerrar(t *testing.T) {
 	if cerrada.Estado != models.EstadoCotizacionCerrada {
 		t.Errorf("estado esperado cerrada, obtenido %s", cerrada.Estado)
 	}
+	// Al cerrar, la respuesta no debe exponer el texto cifrado.
+	if len(cerrada.Mensajes) != 2 {
+		t.Fatalf("se esperaban 2 mensajes, se obtuvieron %d", len(cerrada.Mensajes))
+	}
+	if cerrada.Mensajes[0].Contenido != "Hola" || cerrada.Mensajes[1].Contenido != "Respuesta para: Hola" {
+		t.Error("al cerrar, los mensajes deberían viajar descifrados")
+	}
 
 	_, err = servicio.Cerrar(context.Background(), 5, cotizacion.ID)
 	if !errors.Is(err, ErrCotizacionYaCerrada) {
 		t.Errorf("se esperaba ErrCotizacionYaCerrada, se obtuvo %v", err)
+	}
+}
+
+func TestCotizacionTomaYCierrePersonalConMensajesDescifrados(t *testing.T) {
+	repoCotizaciones := nuevoFakeCotizacionRepository()
+	repoVehiculos := nuevoFakeVehiculoRepository()
+	repoVehiculos.porID[7] = vehiculoDisponiblePrueba(7)
+	servicio := nuevoServicioCotizacionesPrueba(t, repoCotizaciones, repoVehiculos, &fakeGeneradorCotizacion{})
+
+	cotizacion, err := servicio.Crear(context.Background(), 5, 7, "Hola")
+	if err != nil {
+		t.Fatalf("no se pudo crear la cotización: %v", err)
+	}
+
+	tomada, err := servicio.Tomar(context.Background(), 9, cotizacion.ID)
+	if err != nil {
+		t.Fatalf("no se pudo tomar la cotización: %v", err)
+	}
+	if tomada.Mensajes[0].Contenido != "Hola" {
+		t.Errorf("al tomar, el mensaje debería viajar descifrado: %q", tomada.Mensajes[0].Contenido)
+	}
+
+	cerrada, err := servicio.CerrarPersonal(context.Background(), cotizacion.ID)
+	if err != nil {
+		t.Fatalf("no se pudo cerrar la cotización: %v", err)
+	}
+	if cerrada.Estado != models.EstadoCotizacionCerrada {
+		t.Errorf("estado esperado cerrada, obtenido %s", cerrada.Estado)
+	}
+	if cerrada.Mensajes[0].Contenido != "Hola" || cerrada.Mensajes[1].Contenido != "Respuesta para: Hola" {
+		t.Error("al cerrar desde el personal, los mensajes deberían viajar descifrados")
 	}
 }
 
@@ -240,6 +288,73 @@ func sembrarCotizacionPrueba(t *testing.T, repo *fakeCotizacionRepository, clien
 	return cotizacion
 }
 
+func TestCotizacionObtenerMensajesDesde(t *testing.T) {
+	repoCotizaciones := nuevoFakeCotizacionRepository()
+	repoVehiculos := nuevoFakeVehiculoRepository()
+	repoVehiculos.porID[7] = vehiculoDisponiblePrueba(7)
+	servicio := nuevoServicioCotizacionesPrueba(t, repoCotizaciones, repoVehiculos, &fakeGeneradorCotizacion{})
+	ctx := context.Background()
+
+	cotizacion, err := servicio.Crear(ctx, 5, 7, "Hola")
+	if err != nil {
+		t.Fatalf("no se pudo crear la cotización: %v", err)
+	}
+	if _, err := servicio.EnviarMensaje(ctx, 5, cotizacion.ID, "¿Tienen financiación?"); err != nil {
+		t.Fatalf("no se pudo enviar el mensaje: %v", err)
+	}
+
+	// El delta a partir del segundo mensaje devuelve solo los dos posteriores,
+	// descifrados.
+	desdeID := cotizacion.Mensajes[1].ID
+	estado, err := servicio.ObtenerMensajesDesde(ctx, 5, models.RolCliente, cotizacion.ID, desdeID)
+	if err != nil {
+		t.Fatalf("no se pudo obtener el delta: %v", err)
+	}
+	if estado.Total != 4 {
+		t.Errorf("total esperado 4, obtenido %d", estado.Total)
+	}
+	if len(estado.Mensajes) != 2 {
+		t.Fatalf("se esperaban 2 mensajes nuevos, se obtuvieron %d", len(estado.Mensajes))
+	}
+	if estado.Mensajes[0].Remitente != models.RemitenteCliente || estado.Mensajes[0].Contenido != "¿Tienen financiación?" {
+		t.Errorf("el primer mensaje nuevo no es el esperado: %+v", estado.Mensajes[0])
+	}
+	if estado.Mensajes[1].Remitente != models.RemitenteIA || estado.Mensajes[1].Contenido != "Respuesta para: ¿Tienen financiación?" {
+		t.Errorf("el segundo mensaje nuevo no es el esperado: %+v", estado.Mensajes[1])
+	}
+	if estado.Estado != models.EstadoCotizacionAbierta {
+		t.Errorf("estado esperado abierta, obtenido %s", estado.Estado)
+	}
+
+	// Con desdeID en 0 devuelve todo el historial descifrado.
+	desdeCero, err := servicio.ObtenerMensajesDesde(ctx, 5, models.RolCliente, cotizacion.ID, 0)
+	if err != nil {
+		t.Fatalf("no se pudo obtener el historial completo: %v", err)
+	}
+	if len(desdeCero.Mensajes) != 4 || desdeCero.Mensajes[0].Contenido != "Hola" {
+		t.Errorf("con desdeId 0 debería devolver el historial completo descifrado")
+	}
+
+	// Un cliente ajeno no puede pedir el delta de la cotización de otro.
+	if _, err := servicio.ObtenerMensajesDesde(ctx, 99, models.RolCliente, cotizacion.ID, 0); !errors.Is(err, ErrCotizacionNoPertenece) {
+		t.Errorf("se esperaba ErrCotizacionNoPertenece, se obtuvo %v", err)
+	}
+
+	// El personal puede pedirlo aunque no esté asignado a la conversación.
+	if _, err := servicio.ObtenerMensajesDesde(ctx, 9, models.RolVendedor, cotizacion.ID, 0); err != nil {
+		t.Errorf("el personal debería poder pedir el delta: %v", err)
+	}
+}
+
+func TestCotizacionObtenerMensajesDesdeNoEncontrada(t *testing.T) {
+	repo := nuevoFakeCotizacionRepository()
+	servicio := nuevoServicioCotizacionesPrueba(t, repo, nuevoFakeVehiculoRepository(), &fakeGeneradorCotizacion{})
+
+	if _, err := servicio.ObtenerMensajesDesde(context.Background(), 5, models.RolCliente, 999, 0); !errors.Is(err, ErrCotizacionNoEncontrada) {
+		t.Errorf("se esperaba ErrCotizacionNoEncontrada, se obtuvo %v", err)
+	}
+}
+
 func TestCotizacionContarNoLeidosPorLado(t *testing.T) {
 	repo := nuevoFakeCotizacionRepository()
 	servicio := nuevoServicioCotizacionesPrueba(t, repo, nuevoFakeVehiculoRepository(), &fakeGeneradorCotizacion{})
@@ -257,8 +372,8 @@ func TestCotizacionContarNoLeidosPorLado(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error contando para el cliente: %v", err)
 	}
-	if noLeidosCliente != 1 {
-		t.Errorf("el cliente debería tener 1 no leído (vendedor), obtuvo %d", noLeidosCliente)
+	if noLeidosCliente != 2 {
+		t.Errorf("el cliente debería tener 2 no leídos (IA y vendedor), obtuvo %d", noLeidosCliente)
 	}
 
 	// Para el personal cuenta solo el mensaje del cliente; la IA nunca suma.

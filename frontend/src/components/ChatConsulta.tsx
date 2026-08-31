@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { Link } from 'react-router'
 import { api, ErrorApi } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import type { Mensaje, EstadoConsulta } from '../types/consulta'
@@ -7,10 +8,11 @@ import { Boton } from './ui/Boton'
 interface ChatConsultaProps {
   consultaId: number
   estado: EstadoConsulta
+  vehiculoId?: number
   onMensajeEnviado?: () => void
 }
 
-export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsultaProps) {
+export function ChatConsulta({ consultaId, estado, vehiculoId, onMensajeEnviado }: ChatConsultaProps) {
   const { usuario } = useAuth()
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [nuevoMensaje, setNuevoMensaje] = useState('')
@@ -19,7 +21,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
   const mensajesRef = useRef<HTMLDivElement>(null)
-  const ultimoTimestampRef = useRef<string>('')
+  const ultimoIdRef = useRef(0)
   const consultaIdRef = useRef(consultaId)
 
   const scrollToBottom = () => {
@@ -31,7 +33,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
   useEffect(() => {
     let cancelado = false
     consultaIdRef.current = consultaId
-    ultimoTimestampRef.current = ''
+    ultimoIdRef.current = 0
 
     const cargarMensajes = async () => {
       try {
@@ -39,7 +41,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
         if (!cancelado) {
           setMensajes(datos)
           if (datos.length > 0) {
-            ultimoTimestampRef.current = datos[datos.length - 1].createdAt
+            ultimoIdRef.current = datos[datos.length - 1].id
           }
           setError(null)
           api.marcarComoLeidos(consultaId).then(() => {
@@ -71,11 +73,11 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
     if (estado === 'cerrada') return
 
     const intervalo = setInterval(async () => {
-      if (!ultimoTimestampRef.current) return
+      if (!ultimoIdRef.current) return
 
       const idActual = consultaIdRef.current
       try {
-        const nuevos = await api.obtenerMensajesNuevos(idActual, ultimoTimestampRef.current)
+        const nuevos = await api.obtenerMensajesConsultaDesde(idActual, ultimoIdRef.current)
         // Si el usuario navegó a otra conversación mientras volvía la
         // respuesta, se descarta para no ensuciar la conversación actual.
         if (consultaIdRef.current !== idActual) return
@@ -94,7 +96,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
           if (mensajesNuevos.length === 0) return prev
           return [...prev, ...mensajesNuevos]
         })
-        ultimoTimestampRef.current = nuevos[nuevos.length - 1].createdAt
+        ultimoIdRef.current = nuevos[nuevos.length - 1].id
       } catch {
         // Ignorar errores de polling
       }
@@ -117,7 +119,7 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
         if (prev.some((m) => m.id === mensaje.id)) return prev
         return [...prev, mensaje]
       })
-      ultimoTimestampRef.current = mensaje.createdAt
+      ultimoIdRef.current = mensaje.id
       setNuevoMensaje('')
       onMensajeEnviado?.()
     } catch (e: unknown) {
@@ -146,10 +148,18 @@ export function ChatConsulta({ consultaId, estado, onMensajeEnviado }: ChatConsu
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-white/8 px-5 py-3.5">
+      <div className="flex items-center justify-between gap-3 border-b border-white/8 px-5 py-3.5">
         <p className="text-xs text-plata-400">
           {cerrada ? 'Consulta cerrada' : 'Escribí tu mensaje'}
         </p>
+        {vehiculoId !== undefined && (
+          <Link
+            to={`/catalogo/${vehiculoId}`}
+            className="shrink-0 text-xs font-semibold text-acento-400 transition-colors hover:text-acento-300"
+          >
+            Ver ficha
+          </Link>
+        )}
       </div>
 
       <div ref={mensajesRef} className="flex-1 overflow-y-auto px-5 py-4">

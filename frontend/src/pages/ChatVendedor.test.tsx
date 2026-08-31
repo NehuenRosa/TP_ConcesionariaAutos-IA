@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   tomarConsulta: vi.fn(),
   obtenerMensajes: vi.fn(),
   marcarComoLeidos: vi.fn(),
-  obtenerMensajesNuevos: vi.fn(),
+  obtenerMensajesConsultaDesde: vi.fn(),
 }))
 
 vi.mock('../services/api', () => ({
@@ -95,7 +95,7 @@ describe('ChatVendedor', () => {
     vi.mocked(api.listarBandeja).mockResolvedValue([{ ...consulta(), estado: 'en_conversacion' }])
     vi.mocked(api.obtenerMensajes).mockResolvedValue([])
     vi.mocked(api.marcarComoLeidos).mockResolvedValue(undefined)
-    vi.mocked(api.obtenerMensajesNuevos).mockResolvedValue([])
+    vi.mocked(api.obtenerMensajesConsultaDesde).mockResolvedValue([])
 
     renderizar()
 

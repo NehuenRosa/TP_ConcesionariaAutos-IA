@@ -36,15 +36,27 @@ type MensajeCotizacionResumen struct {
 
 // CotizacionDetalle es la ficha completa de una cotización con sus mensajes.
 type CotizacionDetalle struct {
-	ID       uint                       `json:"id"`
-	Vehiculo VehiculoResumen            `json:"vehiculo"`
-	Cliente  *UsuarioResumen            `json:"cliente,omitempty"`
-	Vendedor *UsuarioResumen            `json:"vendedor,omitempty"`
+	ID        uint                       `json:"id"`
+	Vehiculo  VehiculoResumen            `json:"vehiculo"`
+	Cliente   *UsuarioResumen            `json:"cliente,omitempty"`
+	Vendedor  *UsuarioResumen            `json:"vendedor,omitempty"`
 	FechaToma string                     `json:"fechaToma,omitempty"`
-	Estado   string                     `json:"estado"`
-	Mensajes []MensajeCotizacionResumen `json:"mensajes"`
-	CreatedAt string                    `json:"createdAt"`
-	UpdatedAt string                    `json:"updatedAt"`
+	Estado    string                     `json:"estado"`
+	Mensajes  []MensajeCotizacionResumen `json:"mensajes"`
+	CreatedAt string                     `json:"createdAt"`
+	UpdatedAt string                     `json:"updatedAt"`
+}
+
+// RespuestaMensajesCotizacion es la respuesta del fetch incremental del hilo:
+// solo los mensajes nuevos a partir de desdeId, el total y la cabecera actual
+// (estado, vendedor asignado y fecha de toma) para refrescar la vista sin
+// recargar el historial completo.
+type RespuestaMensajesCotizacion struct {
+	Mensajes  []MensajeCotizacionResumen `json:"mensajes"`
+	Total     int64                      `json:"total"`
+	Estado    string                     `json:"estado"`
+	Vendedor  *UsuarioResumen            `json:"vendedor,omitempty"`
+	FechaToma string                     `json:"fechaToma,omitempty"`
 }
 
 // CotizacionHandler agrupa los handlers del panel de cotizaciones del cliente.
@@ -281,6 +293,126 @@ func (h *CotizacionHandler) ObtenerPersonal(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, aCotizacionDetalle(cotizacion))
+}
+
+// ObtenerMensajesNuevos responde el delta de mensajes de una cotización del
+// cliente autenticado junto con la cabecera actual. Es el polling del chat:
+// recibe el id del último mensaje conocido (desdeId) y devuelve solo lo nuevo.
+func (h *CotizacionHandler) ObtenerMensajesNuevos(c *gin.Context) {
+	clienteID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	desdeID, err := h.obtenerDesdeID(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de desdeId inválido"})
+		return
+	}
+
+	estado, err := h.servicio.ObtenerMensajesDesde(c.Request.Context(), clienteID, models.RolCliente, uint(cotizacionID), desdeID)
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrCotizacionNoEncontrada):
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		case errors.Is(err, services.ErrCotizacionNoPertenece):
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener los mensajes nuevos"})
+		}
+		return
+	}
+
+	// Marcar como leídos los mensajes de ia/vendedor para el cliente
+	// (best-effort, igual que al abrir el hilo).
+	if err := h.servicio.MarcarLeidas(c.Request.Context(), clienteID, uint(cotizacionID), services.LadoCliente); err != nil {
+		slog.Warn("no se pudieron marcar como leídos los mensajes de la cotización", "error", err)
+	}
+
+	c.JSON(http.StatusOK, aRespuestaMensajesCotizacion(estado))
+}
+
+// ObtenerMensajesNuevosPersonal responde el delta de mensajes de cualquier
+// cotización para el personal, con la cabecera actual.
+func (h *CotizacionHandler) ObtenerMensajesNuevosPersonal(c *gin.Context) {
+	usuarioID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	cotizacionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de cotización inválido"})
+		return
+	}
+
+	desdeID, err := h.obtenerDesdeID(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de desdeId inválido"})
+		return
+	}
+
+	estado, err := h.servicio.ObtenerMensajesDesde(c.Request.Context(), usuarioID, models.RolVendedor, uint(cotizacionID), desdeID)
+	if err != nil {
+		if errors.Is(err, services.ErrCotizacionNoEncontrada) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudieron obtener los mensajes nuevos"})
+		return
+	}
+
+	// Si el solicitante es el vendedor asignado, marcar como leídos los
+	// mensajes del cliente (best-effort).
+	if err := h.servicio.MarcarLeidas(c.Request.Context(), usuarioID, uint(cotizacionID), services.LadoPersonal); err != nil {
+		slog.Warn("no se pudieron marcar como leídos los mensajes de la cotización", "error", err)
+	}
+
+	c.JSON(http.StatusOK, aRespuestaMensajesCotizacion(estado))
+}
+
+// obtenerDesdeID parsea el query param desdeId. Si falta, devuelve 0 (todo el
+// historial) sin error.
+func (h *CotizacionHandler) obtenerDesdeID(c *gin.Context) (uint, error) {
+	desdeStr := c.Query("desdeId")
+	if desdeStr == "" {
+		return 0, nil
+	}
+	desdeID, err := strconv.ParseUint(desdeStr, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(desdeID), nil
+}
+
+// aRespuestaMensajesCotizacion convierte el estado incremental del servicio en
+// el DTO de respuesta. Los mensajes llegan ya descifrados.
+func aRespuestaMensajesCotizacion(estado *services.EstadoConversacionCotizacion) RespuestaMensajesCotizacion {
+	mensajes := make([]MensajeCotizacionResumen, 0, len(estado.Mensajes))
+	for _, mensaje := range estado.Mensajes {
+		mensajes = append(mensajes, MensajeCotizacionResumen{
+			ID:        mensaje.ID,
+			Remitente: mensaje.Remitente,
+			Contenido: mensaje.Contenido,
+			CreatedAt: mensaje.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	return RespuestaMensajesCotizacion{
+		Mensajes:  mensajes,
+		Total:     estado.Total,
+		Estado:    estado.Estado,
+		Vendedor:  aUsuarioResumenVendedor(estado.Vendedor),
+		FechaToma: aFechaOpcional(estado.FechaToma),
+	}
 }
 
 // Tomar asigna la cotización al vendedor autenticado y silencia la IA.

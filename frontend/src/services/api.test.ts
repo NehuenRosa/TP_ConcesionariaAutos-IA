@@ -60,6 +60,18 @@ describe('cliente api', () => {
     )
   })
 
+  it('elimina un test drive propio por la ruta de baja lógica', async () => {
+    vi.mocked(fetch).mockResolvedValue(respuestaJSON({ id: 4, borradoPorCliente: true }))
+
+    const resultado = await api.eliminarTestDrive(4)
+
+    expect(fetch).toHaveBeenCalledWith(
+      `${urlBase}/test-drives/4/eliminar`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+    expect(resultado).toMatchObject({ id: 4, borradoPorCliente: true })
+  })
+
   it('normaliza el error del backend a ErrorApi', async () => {
     vi.mocked(fetch).mockResolvedValue(respuestaJSON({ error: 'el mensaje no puede estar vacío' }, 400))
 

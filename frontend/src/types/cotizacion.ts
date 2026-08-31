@@ -61,3 +61,11 @@ export interface RespuestaMensajeCotizacion {
   respuesta: string
   enviado: boolean
 }
+
+export interface RespuestaMensajesCotizacion {
+  mensajes: MensajeCotizacion[]
+  total: number
+  estado: EstadoCotizacion
+  vendedor?: UsuarioResumenCotizacion
+  fechaToma?: string
+}

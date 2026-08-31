@@ -40,6 +40,23 @@ const (
 	LadoPersonal = "personal"
 )
 
+// EstadoConversacionCotizacion agrupa los mensajes nuevos de un hilo (fetch
+// incremental) con los datos de cabecera necesarios para refrescar la vista sin
+// recargar el historial completo.
+type EstadoConversacionCotizacion struct {
+	// Mensajes son los mensajes posteriores a desdeID, ya descifrados.
+	Mensajes []models.MensajeCotizacion
+	// Total es la cantidad total de mensajes del hilo.
+	Total int64
+	// Estado es el estado actual de la cotización.
+	Estado string
+	// Vendedor es el vendedor que tomó la cotización (nil si está sin asignar).
+	// Grupo de datos de cabecera para que la vista se entere de una toma.
+	Vendedor *models.Usuario
+	// FechaToma indica cuándo tomó la cotización el vendedor.
+	FechaToma *time.Time
+}
+
 // generadorCotizacion convierte una respuesta preguntada dentro de una
 // cotización en contexto del vehículo cotizado.
 type generadorCotizacion interface {
@@ -70,6 +87,12 @@ type CotizacionService interface {
 	// ObtenerPersonal devuelve cualquier cotización con sus mensajes
 	// descifrados, para la vista de atención del vendedor.
 	ObtenerPersonal(ctx context.Context, cotizacionID uint) (*models.Cotizacion, error)
+	// ObtenerMensajesDesde devuelve los mensajes del hilo posteriores a desdeID
+	// (ya descifrados) junto con el total y la cabecera actual (estado,
+	// vendedor asignado y fecha de toma). Reemplaza el recorte completo en el
+	// polling del chat por un fetch incremental. El rol cliente exige que la
+	// cotización sea propia; cualquier rol de personal puede pedir el delta.
+	ObtenerMensajesDesde(ctx context.Context, usuarioID uint, rol string, cotizacionID uint, desdeID uint) (*EstadoConversacionCotizacion, error)
 	// Tomar asigna la cotización al vendedor autenticado: a partir de ese
 	// momento la IA deja de responder. Es idempotente para el mismo vendedor y
 	// falla si otro vendedor ya la tomó o si está cerrada.
@@ -142,7 +165,14 @@ func (s *cotizacionService) Crear(ctx context.Context, clienteID uint, vehiculoI
 		return nil, err
 	}
 
-	return s.repositorioCotizaciones.Crear(ctx, cotizacion)
+	creada, err := s.repositorioCotizaciones.Crear(ctx, cotizacion)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.descifrarMensajes(creada); err != nil {
+		return nil, err
+	}
+	return creada, nil
 }
 
 // ListarPorCliente devuelve las cotizaciones con su último mensaje descifrado.
@@ -270,6 +300,9 @@ func (s *cotizacionService) Cerrar(ctx context.Context, clienteID uint, cotizaci
 	if err := s.repositorioCotizaciones.Actualizar(ctx, cotizacion); err != nil {
 		return nil, fmt.Errorf("cerrar cotización: %w", err)
 	}
+	if err := s.descifrarMensajes(cotizacion); err != nil {
+		return nil, err
+	}
 	return cotizacion, nil
 }
 
@@ -305,6 +338,48 @@ func (s *cotizacionService) ObtenerPersonal(ctx context.Context, cotizacionID ui
 	return cotizacion, nil
 }
 
+// ObtenerMensajesDesde devuelve el delta de mensajes del hilo junto con su
+// total y cabecera. Para un cliente valida que la cotización sea propia; para
+// el personal no hay restricción de asignación (el router ya exige rol de
+// vendedor). Los mensajes se devuelven ya descifrados.
+func (s *cotizacionService) ObtenerMensajesDesde(ctx context.Context, usuarioID uint, rol string, cotizacionID uint, desdeID uint) (*EstadoConversacionCotizacion, error) {
+	cotizacion, err := s.repositorioCotizaciones.ObtenerCabecera(ctx, cotizacionID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrCotizacionNoEncontrada
+		}
+		return nil, fmt.Errorf("obtener cotización: %w", err)
+	}
+	if rol == models.RolCliente && cotizacion.ClienteID != usuarioID {
+		return nil, ErrCotizacionNoPertenece
+	}
+
+	mensajes, err := s.repositorioCotizaciones.ObtenerMensajesDesde(ctx, cotizacionID, desdeID)
+	if err != nil {
+		return nil, fmt.Errorf("obtener mensajes nuevos de cotización: %w", err)
+	}
+	for i := range mensajes {
+		contenido, err := s.cifrador.Descifrar(mensajes[i].Contenido)
+		if err != nil {
+			return nil, fmt.Errorf("descifrar mensaje de cotización: %w", err)
+		}
+		mensajes[i].Contenido = contenido
+	}
+
+	total, err := s.repositorioCotizaciones.ContarMensajes(ctx, cotizacionID)
+	if err != nil {
+		return nil, fmt.Errorf("contar mensajes de cotización: %w", err)
+	}
+
+	return &EstadoConversacionCotizacion{
+		Mensajes:  mensajes,
+		Total:     total,
+		Estado:    cotizacion.Estado,
+		Vendedor:  cotizacion.Vendedor,
+		FechaToma: cotizacion.FechaToma,
+	}, nil
+}
+
 // Tomar asigna la cotización al vendedor autenticado. Es idempotente si la
 // tomó el mismo vendedor; falla si otro vendedor la tiene o está cerrada.
 func (s *cotizacionService) Tomar(ctx context.Context, vendedorID uint, cotizacionID uint) (*models.Cotizacion, error) {
@@ -323,6 +398,9 @@ func (s *cotizacionService) Tomar(ctx context.Context, vendedorID uint, cotizaci
 		if *cotizacion.VendedorID != vendedorID {
 			return nil, ErrCotizacionYaAtendida
 		}
+		if err := s.descifrarMensajes(cotizacion); err != nil {
+			return nil, err
+		}
 		return cotizacion, nil
 	}
 
@@ -331,6 +409,9 @@ func (s *cotizacionService) Tomar(ctx context.Context, vendedorID uint, cotizaci
 	cotizacion.FechaToma = &now
 	if err := s.repositorioCotizaciones.Actualizar(ctx, cotizacion); err != nil {
 		return nil, fmt.Errorf("tomar cotización: %w", err)
+	}
+	if err := s.descifrarMensajes(cotizacion); err != nil {
+		return nil, err
 	}
 	return cotizacion, nil
 }
@@ -397,6 +478,9 @@ func (s *cotizacionService) CerrarPersonal(ctx context.Context, cotizacionID uin
 	if err := s.repositorioCotizaciones.Actualizar(ctx, cotizacion); err != nil {
 		return nil, fmt.Errorf("cerrar cotización: %w", err)
 	}
+	if err := s.descifrarMensajes(cotizacion); err != nil {
+		return nil, err
+	}
 	return cotizacion, nil
 }
 
@@ -438,8 +522,12 @@ func construirCotizacion(cifrador cifrado.Cifrador, vehiculoID uint, clienteID u
 }
 
 // aTurnosChat convierte los mensajes (ya descifrados) de una cotización en el
-// turnos que entiende el chat del asistente.
+// turnos que entiende el chat del asistente. Solo se pasan al LLM los últimos
+// MaximoTurnosHistorial turnos: el historial completo se conserva en la base y
+// se muestra en la UI, pero el modelo no necesita recordar la conversación
+// entera (ver docs/roadmap.md "Escalabilidad de conversaciones").
 func aTurnosChat(mensajes []models.MensajeCotizacion) []TurnoChat {
+	mensajes = ultimosTurnos(mensajes, MaximoTurnosHistorial)
 	turnos := make([]TurnoChat, 0, len(mensajes))
 	for _, mensaje := range mensajes {
 		rol := "asistente"
@@ -451,10 +539,19 @@ func aTurnosChat(mensajes []models.MensajeCotizacion) []TurnoChat {
 	return turnos
 }
 
+// ultimosTurnos devuelve el segmento final de N turnos (la conversación viene
+// ordenada de más vieja a más nueva).
+func ultimosTurnos[T any](turnos []T, cantidad int) []T {
+	if len(turnos) <= cantidad {
+		return turnos
+	}
+	return turnos[len(turnos)-cantidad:]
+}
+
 // ContarNoLeidos devuelve los mensajes de cotizaciones sin leer del usuario
-// según su rol: para un cliente cuentan las respuestas de vendedor; para el
-// personal, los mensajes de cliente en cotizaciones abiertas propias o sin
-// asignar.
+// según su rol: para un cliente cuentan las respuestas de la IA o del
+// vendedor; para el personal, los mensajes de cliente en cotizaciones abiertas
+// propias o sin asignar.
 func (s *cotizacionService) ContarNoLeidos(ctx context.Context, usuarioID uint, rol string) (int64, error) {
 	if rol == models.RolCliente {
 		return s.repositorioCotizaciones.ContarNoLeidosDeCliente(ctx, usuarioID)

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"concesionaria/backend/internal/models"
 	"concesionaria/backend/internal/services"
@@ -107,7 +106,9 @@ func (h *MensajeHandler) ObtenerMensajes(c *gin.Context) {
 	c.JSON(http.StatusOK, resumenes)
 }
 
-// ObtenerNuevos obtiene los mensajes nuevos desde un timestamp.
+// ObtenerNuevos obtiene los mensajes de la consulta con id mayor a desdeId.
+// Es el delta que usa el polling del chat: recibe el id del último mensaje
+// conocido y devuelve solo los posteriores (marcando los del otro como leídos).
 func (h *MensajeHandler) ObtenerNuevos(c *gin.Context) {
 	usuarioID, err := extraerUsuarioID(c)
 	if err != nil {
@@ -121,19 +122,17 @@ func (h *MensajeHandler) ObtenerNuevos(c *gin.Context) {
 		return
 	}
 
-	desdeStr := c.Query("desde")
-	var desde time.Time
+	var desdeID uint64
+	desdeStr := c.Query("desdeId")
 	if desdeStr != "" {
-		desde, err = time.Parse(time.RFC3339, desdeStr)
+		desdeID, err = strconv.ParseUint(desdeStr, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de timestamp inválido"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Formato de desdeId inválido"})
 			return
 		}
-	} else {
-		desde = time.Time{}
 	}
 
-	mensajes, err := h.servicio.ObtenerNuevos(c.Request.Context(), uint(consultaID), usuarioID, desde)
+	mensajes, err := h.servicio.ObtenerDesdeID(c.Request.Context(), uint(consultaID), usuarioID, uint(desdeID))
 	if err != nil {
 		if errors.Is(err, services.ErrNoEsParticipante) {
 			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
