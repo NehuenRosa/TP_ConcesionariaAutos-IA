@@ -167,6 +167,12 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 
 - El sistema valida disponibilidad y **evita superposición**: no puede existir más
   de un turno para la misma unidad en la misma fecha y franja horaria (CU-07).
+- **Eliminación con baja lógica**: el cliente puede quitar un turno de su vista
+  con `DELETE /api/test-drives/:id/eliminar` (campo `borrado_por_cliente`).
+  Si el turno está activo (`solicitado`/`confirmado`) primero se cancela (libera
+  la franja) y después se marca como borrado; `ListarPorCliente` excluye los
+  borrados. El vendedor siempre sigue viendo el turno con su estado real.
+  `DELETE /api/test-drives/:id` sigue siendo la cancelación propia clásica.
 
 ### Roles y permisos
 
@@ -182,6 +188,10 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   5 MB + `descripcion` opcional + `sesion_id` opcional) y
   `POST /api/chatbot/tasacion/confirmar` (JSON `{sesion_id, mensaje}` con el día
   y la franja elegidos). No requieren autenticación.
+- **Historial acotado**: el contexto del LLM se recorta a los últimos
+  `MaximoTurnosHistorial = 10` turnos (constante en `chatbot.go`); el widget
+  envía el mismo corte (`.slice(-10)` en `Chatbot.tsx`). El historial completo
+  vive en la conversación del chat, no en el prompt.
 - **Confirmación de tasación**: al tasar con referencia, la IA guarda la
   tasación **pendiente** en la tabla `tasaciones` (vehículo identificado,
   precios reales y `sesion_id`) y pregunta qué día y franja horaria prefiere el
@@ -226,6 +236,38 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   `/:id/tomar`, `/:id/mensajes-vendedor`, `/:id/cerrar-personal`.
 - El cliente ve en su panel quién lo atiende y los mensajes del asesor con su
   etiqueta propia; ambos lados refrescan cada 10 s.
+- **Fetch incremental (polling por `desdeId`)**: abrir un hilo baja el historial
+  completo; el polling consulta `GET /cotizaciones/:id/mensajes?desdeId=N`
+  (cliente) o `GET /cotizaciones/:id/mensajes/personal?desdeId=N` (vendedor,
+  con `ExigirRol("vendedor")`) y recibe solo los mensajes con `id > desdeId`
+  (respuesta `{mensajes, total, estado, vendedor, fechaToma}`). En consultas, el
+  equivalente es `GET /consultas/:id/mensajes/nuevos?desdeId=` sin cabecera:
+  `desdeId=0` devuelve la conversación completa. Siempre se usa el **id**, no el
+  timestamp, para no saltearse mensajes del mismo segundo. Los chats fusionan por
+  id y marcan leídos (best-effort) tras recibir el delta.
+- **Retención de conversaciones**: `RETENCION_CONVERSACIONES_DIAS` (default 180)
+  configura el job que purga en transacción las consultas y cotizaciones
+  **cerradas** con `updated_at` vencido (mensajes primero, luego cabeceras). Corre
+  al arrancar y cada hora (`main.go`); los índices compuestos
+  `idx_mensajes_consulta_hilo (consulta_id, created_at)` y
+  `idx_cotizacion_mensajes_hilo (cotizacion_id, created_at)` acompañan el acceso
+  por hilo del fetch incremental.
+- **Notificaciones**: las respuestas de la IA en una cotización cuentan como no
+  leídas para el cliente (`ContarNoLeidosDeCliente` cuenta todo mensaje con
+  `remitente <> 'cliente' AND leido_por_cliente = false`), de modo que el aviso
+  global dispara el mismo toast que cuando responde un vendedor aunque el
+  cliente haya salido de la pestaña. `useNotificaciones` recuerda qué canal
+  subió (`canalAviso`) y el "Ver" del toast aterriza en la bandeja correcta
+  (Mis cotizaciones / Mis consultas según rol y canal).
+- **Enlace a la ficha**: cotizaciones y consultas (cliente: `MisCotizaciones`,
+  `MisConsultas`, chats; vendedor: `BandejaCotizaciones`, `BandejaEntrada`,
+  chats) ofrecen un enlace "Ver ficha" a `/catalogo/:id`. Evitar `<Link>`
+  anidados dentro de `<button>`/`<Link>` al extender estas listas.
+- **Mensajes descifrados en las respuestas**: los endpoints que mutan la
+  cotización (`Crear`, `Cerrar`, `CerrarPersonal`, `Tomar`) devuelven los
+  mensajes ya descifrados (`descifrarMensajes`), igual que las lecturas; nunca
+  expone el texto cifrado en una respuesta HTTP. En el frontend, una cotización
+  cerrada muestra un panel "Cotización cerrada" y oculta la conversación.
 
 ## Flujo de trabajo con OpenSpec
 

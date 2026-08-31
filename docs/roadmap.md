@@ -40,6 +40,43 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 > conversaciones de cotización iniciadas con la IA; al tomarla, la IA queda
 > silenciada y responde el vendedor en su nombre. Detalle en
 > `openspec/specs/cotizaciones-ia/`.
+>
+> Mejoras: las respuestas de la IA en una cotización cuentan como mensaje no
+> leído para el cliente, así el aviso global (polling + toast) se dispara igual
+> que cuando responde un vendedor aunque el cliente haya salido de la pestaña.
+> El aviso dirige al canal correcto (Mis cotizaciones / Mis consultas según el
+> rol y qué bandeja subió). Además, todas las pantallas de cotizaciones y
+> consultas (cliente y vendedor) tienen un enlace "Ver ficha" hacia el vehículo
+> en el catálogo (`/catalogo/:id`).
+>
+> CU-07: además de cancelar, el cliente puede **eliminar** un turno con baja
+> lógica (`borrado_por_cliente`): `DELETE /api/test-drives/:id/eliminar` lo
+> cancela si estaba activo (libera la franja) y lo oculta de Mis test drives.
+> El vendedor sigue viéndolo con su estado real.
+>
+> Cotizaciones: al crearlas, cerrarlas o tomarlas, la API devuelve los mensajes
+> ya descifrados (no expone el texto cifrado en las respuestas). En el
+> frontend, una cotización cerrada se muestra con un panel "Cotización cerrada"
+> y oculta la conversación.
+>
+> UX: al navegar entre páginas, la barra de scroll vuelve automáticamente al
+> inicio (scroll to top en `LayoutBase`).
+>
+> Escalabilidad de conversaciones (cotizaciones y consultas):
+> 1. **Fetch incremental por `desdeId`**: abrir un hilo baja el historial
+>    completo; el polling (5 s consultas, 10 s cotizaciones) trae solo los
+>    mensajes con `id > desdeId` (`GET /consultas/:id/mensajes/nuevos?desdeId=`,
+>    `GET /cotizaciones/:id/mensajes`, `GET /cotizaciones/:id/mensajes/personal`).
+>    Se usa el id y no el timestamp para no saltearse mensajes de un mismo
+>    segundo.
+> 2. **Recorte del historial del LLM**: `MaximoTurnosHistorial = 10` (antes 20);
+>    `aTurnosChat` recorta y el widget envía `.slice(-10)`.
+> 3. **Retención**: env `RETENCION_CONVERSACIONES_DIAS` (default 180). Un job
+>    interno (al arrancar y cada 1 h) purga consultas y cotizaciones cerradas
+>    con `updated_at` anterior al corte, junto con sus mensajes, en transacción.
+> 4. **Índices compuestos**: `idx_cotizacion_mensajes_hilo (cotizacion_id,
+>    created_at)` y `idx_mensajes_consulta_hilo (consulta_id, created_at)` para
+>    no tocar el índice de PK al leer por id del hilo.
 
 ## Orden sugerido de implementación
 
