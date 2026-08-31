@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 )
 
 // Configuracion agrupa los valores de configuración cargados del entorno.
@@ -40,6 +41,10 @@ type Configuracion struct {
 	// personal.
 	CbuConcesionaria  string
 	AliasConcesionaria string
+	// RetencionConversacionesDias define cuántos días se conservan las
+	// conversaciones cerradas (cotizaciones y consultas) antes de que el job
+	// interno las purgue (privacidad y control de crecimiento de la base).
+	RetencionConversacionesDias int
 }
 
 // Cargar lee las variables de entorno y devuelve la configuración de la API.
@@ -90,7 +95,18 @@ func Cargar() Configuracion {
 		GoogleClientSecret: obtener("GOOGLE_CLIENT_SECRET", ""),
 		CbuConcesionaria:   obtener("CBU_CONCESIONARIA", ""),
 		AliasConcesionaria: obtener("ALIAS_CONCESIONARIA", ""),
+		RetencionConversacionesDias: diasRetencion(obtener("RETENCION_CONVERSACIONES_DIAS", "180")),
 	}
+}
+
+// diasRetencion convierte el valor de entorno a días, con un mínimo de 1 día
+// para que un valor inválido no deshabilite la purga silenciosamente.
+func diasRetencion(valor string) int {
+	dias, err := strconv.Atoi(valor)
+	if err != nil || dias < 1 {
+		return 180
+	}
+	return dias
 }
 
 func obtener(clave string, valorPorDefecto string) string {
