@@ -15,6 +15,7 @@ import type {
   CotizacionResumen,
   CrearCotizacion,
   RespuestaMensajeCotizacion,
+  RespuestaMensajesCotizacion,
 } from '../types/cotizacion'
 import type {
   ConfirmarTasacion,
@@ -224,8 +225,8 @@ export const api = {
     }),
   obtenerMensajes: (consultaId: number) =>
     peticion<Mensaje[]>(`/consultas/${consultaId}/mensajes`),
-  obtenerMensajesNuevos: (consultaId: number, desde: string) =>
-    peticion<Mensaje[]>(`/consultas/${consultaId}/mensajes/nuevos?desde=${desde}`),
+  obtenerMensajesConsultaDesde: (consultaId: number, desdeId: number) =>
+    peticion<Mensaje[]>(`/consultas/${consultaId}/mensajes/nuevos?desdeId=${desdeId}`),
   marcarComoLeidos: (consultaId: number) =>
     peticion<void>(`/consultas/${consultaId}/mensajes/leidos`, { method: 'PUT' }),
 
@@ -244,6 +245,8 @@ export const api = {
   listarMisTestDrives: () => peticion<TurnoTestDrive[]>('/test-drives/mis-turnos'),
   cancelarTestDrive: (id: number) =>
     peticion<TurnoTestDrive>(`/test-drives/${id}`, { method: 'DELETE' }),
+  eliminarTestDrive: (id: number) =>
+    peticion<TurnoTestDrive>(`/test-drives/${id}/eliminar`, { method: 'DELETE' }),
   listarTestDrives: (estado?: string) =>
     peticion<TurnoTestDrive[]>(`/test-drives${estado ? `?estado=${estado}` : ''}`),
   confirmarTestDrive: (id: number) =>
@@ -311,6 +314,8 @@ export const api = {
     }),
   listarMisCotizaciones: () => peticion<CotizacionResumen[]>('/cotizaciones/mis-cotizaciones'),
   obtenerCotizacion: (id: number) => peticion<Cotizacion>(`/cotizaciones/${id}`),
+  obtenerMensajesCotizacionDesde: (id: number, desdeId: number) =>
+    peticion<RespuestaMensajesCotizacion>(`/cotizaciones/${id}/mensajes?desdeId=${desdeId}`),
   enviarMensajeCotizacion: (id: number, mensaje: string) =>
     peticion<RespuestaMensajeCotizacion>(`/cotizaciones/${id}/mensajes`, {
       method: 'POST',
@@ -322,6 +327,8 @@ export const api = {
   // Atención personal de cotizaciones (vendedor)
   listarBandejaCotizaciones: () => peticion<CotizacionResumen[]>('/cotizaciones/bandeja'),
   obtenerCotizacionPersonal: (id: number) => peticion<Cotizacion>(`/cotizaciones/${id}/personal`),
+  obtenerMensajesCotizacionPersonalDesde: (id: number, desdeId: number) =>
+    peticion<RespuestaMensajesCotizacion>(`/cotizaciones/${id}/mensajes/personal?desdeId=${desdeId}`),
   tomarCotizacion: (id: number) =>
     peticion<Cotizacion>(`/cotizaciones/${id}/tomar`, { method: 'PUT' }),
   responderCotizacionVendedor: (id: number, mensaje: string) =>

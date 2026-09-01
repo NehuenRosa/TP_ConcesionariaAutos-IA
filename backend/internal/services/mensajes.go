@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"concesionaria/backend/internal/models"
 	"concesionaria/backend/internal/repositories"
@@ -19,8 +18,11 @@ type MensajeService interface {
 	Enviar(ctx context.Context, consultaID uint, remitenteID uint, contenido string) (*models.Mensaje, error)
 	// ObtenerPorConsulta obtiene todos los mensajes de una consulta.
 	ObtenerPorConsulta(ctx context.Context, consultaID uint, usuarioID uint) ([]models.Mensaje, error)
-	// ObtenerNuevos obtiene los mensajes nuevos desde un timestamp.
-	ObtenerNuevos(ctx context.Context, consultaID uint, usuarioID uint, desde time.Time) ([]models.Mensaje, error)
+	// ObtenerDesdeID obtiene los mensajes de la consulta con id mayor al
+	// indicado y los marca como leídos. Reemplaza el recorte por timestamp:
+	// como los timestamps se serializan sin sub-segundos, dos mensajes del
+	// mismo segundo podían perderse.
+	ObtenerDesdeID(ctx context.Context, consultaID uint, usuarioID uint, desdeID uint) ([]models.Mensaje, error)
 	// ContarNoLeidosPorConsultas cuenta los mensajes no leídos de un usuario
 	// en varias consultas.
 	ContarNoLeidosPorConsultas(ctx context.Context, consultaIDs []uint, usuarioID uint) (map[uint]int, error)
@@ -100,9 +102,9 @@ func (s *mensajeService) ObtenerPorConsulta(ctx context.Context, consultaID uint
 	return s.repositorioMensajes.ListarPorConsulta(ctx, consultaID)
 }
 
-// ObtenerNuevos obtiene los mensajes nuevos desde un timestamp y los marca
-// como leídos.
-func (s *mensajeService) ObtenerNuevos(ctx context.Context, consultaID uint, usuarioID uint, desde time.Time) ([]models.Mensaje, error) {
+// ObtenerDesdeID obtiene los mensajes de la consulta posteriores a desdeID y
+// marca como leídos los del otro participante.
+func (s *mensajeService) ObtenerDesdeID(ctx context.Context, consultaID uint, usuarioID uint, desdeID uint) ([]models.Mensaje, error) {
 	// Verificar que el usuario es participante
 	esParticipante, err := s.consultaService.EsParticipante(ctx, consultaID, usuarioID)
 	if err != nil {
@@ -112,7 +114,7 @@ func (s *mensajeService) ObtenerNuevos(ctx context.Context, consultaID uint, usu
 		return nil, ErrNoEsParticipante
 	}
 
-	mensajes, err := s.repositorioMensajes.ObtenerNuevos(ctx, consultaID, desde)
+	mensajes, err := s.repositorioMensajes.ObtenerDesdeID(ctx, consultaID, desdeID)
 	if err != nil {
 		return nil, fmt.Errorf("obtener mensajes nuevos: %w", err)
 	}

@@ -168,6 +168,13 @@ export function BandejaEntrada() {
                     >
                       Abrir chat
                     </Boton>
+                    <Boton
+                      variante="fantasma"
+                      tamano="sm"
+                      onClick={() => navigate(`/catalogo/${consulta.vehiculo.id}`)}
+                    >
+                      Ver ficha
+                    </Boton>
                   </div>
                 </div>
               </article>

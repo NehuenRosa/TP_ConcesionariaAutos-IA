@@ -178,19 +178,20 @@ devuelva todos los mensajes de una consulta para sus participantes.
 
 ### Requirement: Obtener mensajes nuevos (polling)
 
-El sistema SHALL exponer un endpoint `GET /api/consultas/:id/mensajes/nuevos?desde=<timestamp>`
-que devuelva los mensajes recibidos después del timestamp indicado, marcándolos
-como leídos.
+El sistema SHALL exponer un endpoint `GET /api/consultas/:id/mensajes/nuevos?desdeId=`
+que devuelva los mensajes con `id` mayor al indicado (y el historial completo si
+`desdeId=0`), marcándolos como leídos. El polling usa el **id**, no el
+timestamp, para no saltearse mensajes del mismo segundo.
 
 #### Scenario: Hay mensajes nuevos
 
-- **WHEN** un participante solicita mensajes nuevos desde un timestamp
-- **THEN** el sistema responde con los mensajes posteriores al timestamp,
+- **WHEN** un participante solicita mensajes nuevos desde un id
+- **THEN** el sistema responde con los mensajes con `id` mayor al indicado,
   marcados como leídos
 
 #### Scenario: No hay mensajes nuevos
 
-- **WHEN** un participante solicita mensajes nuevos desde un timestamp y no
+- **WHEN** un participante solicita mensajes nuevos desde un id y no
   hay mensajes posteriores
 - **THEN** el sistema responde con una lista vacía
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router'
+import { useParams, useNavigate, Link } from 'react-router'
 import { ChatConsulta } from '../components/ChatConsulta'
 import { Boton } from '../components/ui/Boton'
 import { ContenidoCargando } from '../components/ui/Spinner'
@@ -104,7 +104,15 @@ export function ChatVendedor() {
           <span className="h-4 w-px bg-white/10" />
           <h1 className="font-display text-lg font-semibold text-plata-100">Consulta #{id}</h1>
         </div>
-        <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
+        <div className="flex shrink-0 items-center gap-3">
+          <Link
+            to={`/catalogo/${consulta.vehiculo.id}`}
+            className="text-xs font-semibold text-acento-400 transition-colors hover:text-acento-300"
+          >
+            Ver ficha
+          </Link>
+          <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
+        </div>
       </div>
 
       {error && (
@@ -136,7 +144,7 @@ export function ChatVendedor() {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-white/8 bg-carbono-850/60 backdrop-blur-sm">
-          <ChatConsulta consultaId={consulta.id} estado={estado} />
+          <ChatConsulta consultaId={consulta.id} estado={estado} vehiculoId={consulta.vehiculo.id} />
         </div>
       )}
     </div>

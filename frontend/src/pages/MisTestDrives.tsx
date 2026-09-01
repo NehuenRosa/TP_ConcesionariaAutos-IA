@@ -31,6 +31,7 @@ export function MisTestDrives() {
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [cancelandoId, setCancelandoId] = useState<number | null>(null)
+  const [eliminandoId, setEliminandoId] = useState<number | null>(null)
 
   const cargarTurnos = useCallback(async () => {
     try {
@@ -61,6 +62,23 @@ export function MisTestDrives() {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo cancelar el turno')
     } finally {
       setCancelandoId(null)
+    }
+  }
+
+  const handleEliminar = async (turno: TurnoTestDrive) => {
+    const confirmacion = esActivo(turno.estado)
+      ? `Se va a cancelar y ocultar el test drive de ${turno.vehiculo.marca} ${turno.vehiculo.modelo}. ¿Continuar?`
+      : `¿Eliminar el test drive de ${turno.vehiculo.marca} ${turno.vehiculo.modelo} de tu listado?`
+    if (!window.confirm(confirmacion)) return
+
+    setEliminandoId(turno.id)
+    try {
+      await api.eliminarTestDrive(turno.id)
+      await cargarTurnos()
+    } catch (e: unknown) {
+      setError(e instanceof ErrorApi ? e.message : 'No se pudo eliminar el turno')
+    } finally {
+      setEliminandoId(null)
     }
   }
 
@@ -135,16 +153,26 @@ export function MisTestDrives() {
                 </div>
               </div>
 
-              {esActivo(turno.estado) && (
+              <div className="flex shrink-0 items-center gap-2">
+                {esActivo(turno.estado) && (
+                  <Boton
+                    variante="peligro"
+                    tamano="sm"
+                    onClick={() => handleCancelar(turno)}
+                    disabled={cancelandoId === turno.id || eliminandoId === turno.id}
+                  >
+                    {cancelandoId === turno.id ? 'Cancelando…' : 'Cancelar turno'}
+                  </Boton>
+                )}
                 <Boton
-                  variante="peligro"
+                  variante="fantasma"
                   tamano="sm"
-                  onClick={() => handleCancelar(turno)}
-                  disabled={cancelandoId === turno.id}
+                  onClick={() => handleEliminar(turno)}
+                  disabled={cancelandoId === turno.id || eliminandoId === turno.id}
                 >
-                  {cancelandoId === turno.id ? 'Cancelando…' : 'Cancelar turno'}
+                  {eliminandoId === turno.id ? 'Eliminando…' : 'Eliminar'}
                 </Boton>
-              )}
+              </div>
             </div>
           ))}
         </div>

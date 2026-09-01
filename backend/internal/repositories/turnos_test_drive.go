@@ -29,7 +29,8 @@ type TurnoTestDriveRepository interface {
 	CrearSiDisponible(ctx context.Context, turno *models.TurnoTestDrive) (*models.TurnoTestDrive, error)
 	// ObtenerPorID devuelve un turno con su vehículo, imágenes y cliente.
 	ObtenerPorID(ctx context.Context, id uint) (*models.TurnoTestDrive, error)
-	// ListarPorCliente devuelve los turnos de un cliente, ordenados por fecha.
+	// ListarPorCliente devuelve los turnos de un cliente, ordenados por fecha,
+	// excluyendo los que el cliente borró (baja lógica).
 	ListarPorCliente(ctx context.Context, clienteID uint) ([]models.TurnoTestDrive, error)
 	// Listar devuelve los turnos con el filtro de estado opcional, ordenados
 	// por fecha y franja.
@@ -113,11 +114,12 @@ func (r *turnoTestDriveRepository) ObtenerPorID(ctx context.Context, id uint) (*
 	return &turno, nil
 }
 
-// ListarPorCliente devuelve los turnos de un cliente, ordenados por fecha.
+// ListarPorCliente devuelve los turnos de un cliente, ordenados por fecha,
+// excluyendo los que el cliente borró (baja lógica).
 func (r *turnoTestDriveRepository) ListarPorCliente(ctx context.Context, clienteID uint) ([]models.TurnoTestDrive, error) {
 	var turnos []models.TurnoTestDrive
 	err := r.base.WithContext(ctx).
-		Where("cliente_id = ?", clienteID).
+		Where("cliente_id = ? AND borrado_por_cliente = ?", clienteID, false).
 		Preload("Vehiculo").
 		Preload("Vehiculo.Imagenes").
 		Order("fecha ASC, franja ASC").

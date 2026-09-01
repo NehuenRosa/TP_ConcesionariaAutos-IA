@@ -137,7 +137,33 @@ func (h *TurnoTestDriveHandler) Cancelar(c *gin.Context) {
 	c.JSON(http.StatusOK, aTurnoResumen(turno))
 }
 
-// Listar lista los turnos para el vendedor autenticado.
+// Eliminar borra lógicamente un turno propio para que el cliente no lo vea en
+// su listado. Los turnos activos se cancelan antes de ocultarlos.
+func (h *TurnoTestDriveHandler) Eliminar(c *gin.Context) {
+	clienteID, err := extraerUsuarioID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "No autorizado"})
+		return
+	}
+
+	turnoID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Identificador de turno inválido"})
+		return
+	}
+
+	turno, err := h.servicio.Eliminar(c.Request.Context(), uint(turnoID), clienteID)
+	if err != nil {
+		if errors.Is(err, services.ErrTurnoNoEncontrado) {
+			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo eliminar el turno"})
+		return
+	}
+
+	c.JSON(http.StatusOK, aTurnoResumen(turno))
+}
 func (h *TurnoTestDriveHandler) Listar(c *gin.Context) {
 	estado := c.Query("estado")
 

@@ -162,6 +162,7 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 			testDrives.POST("", handlerTurnos.Solicitar)
 			testDrives.GET("/mis-turnos", handlerTurnos.ListarMisTurnos)
 			testDrives.DELETE("/:id", handlerTurnos.Cancelar)
+			testDrives.DELETE("/:id/eliminar", handlerTurnos.Eliminar)
 
 			gestionTestDrives := testDrives.Group("")
 			gestionTestDrives.Use(middleware.ExigirRol("vendedor"))
@@ -203,6 +204,10 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 			cotizaciones.GET("/bandeja", middleware.ExigirRol("vendedor"), handlerCotizaciones.ListarBandeja)
 			cotizaciones.GET("/:id", handlerCotizaciones.Obtener)
 			cotizaciones.GET("/:id/personal", middleware.ExigirRol("vendedor"), handlerCotizaciones.ObtenerPersonal)
+			// Fetch incremental del chat: devuelven solo los mensajes con id
+			// mayor a ?desdeId (el polling no recarga el historial completo).
+			cotizaciones.GET("/:id/mensajes", handlerCotizaciones.ObtenerMensajesNuevos)
+			cotizaciones.GET("/:id/mensajes/personal", middleware.ExigirRol("vendedor"), handlerCotizaciones.ObtenerMensajesNuevosPersonal)
 			cotizaciones.POST("/:id/mensajes", handlerCotizaciones.EnviarMensaje)
 			cotizaciones.PUT("/:id/tomar", middleware.ExigirRol("vendedor"), handlerCotizaciones.Tomar)
 			cotizaciones.POST("/:id/mensajes-vendedor", middleware.ExigirRol("vendedor"), handlerCotizaciones.ResponderComoVendedor)

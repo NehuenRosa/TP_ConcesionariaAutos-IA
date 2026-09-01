@@ -32,13 +32,16 @@ func (Consulta) TableName() string {
 
 // Mensaje es un mensaje dentro de una consulta/conversación.
 type Mensaje struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	ConsultaID  uint      `gorm:"not null;index" json:"consultaId"`
+	ID uint `gorm:"primaryKey" json:"id"`
+	// El índice compuesto (consulta_id, created_at) acelera la carga del
+	// historial de un hilo ordenado cronológicamente y el fetch incremental
+	// por desdeID.
+	ConsultaID  uint      `gorm:"not null;index:idx_mensajes_consulta_hilo,priority:1" json:"consultaId"`
 	RemitenteID uint      `gorm:"not null" json:"remitenteId"`
 	Remitente   Usuario   `gorm:"foreignKey:RemitenteID" json:"remitente"`
 	Contenido   string    `gorm:"type:text;not null" json:"contenido"`
 	Leido       bool      `gorm:"default:false" json:"leido"`
-	CreatedAt   time.Time `json:"createdAt"`
+	CreatedAt   time.Time `gorm:"index:idx_mensajes_consulta_hilo,priority:2" json:"createdAt"`
 }
 
 // TableName define el nombre de la tabla en español.

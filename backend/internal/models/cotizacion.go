@@ -53,13 +53,16 @@ func (Cotizacion) TableName() string {
 // LeidoPorCliente y LeidoPorVendedor alimentan las notificaciones de mensajes
 // sin leer de cada lado.
 type MensajeCotizacion struct {
-	ID               uint      `gorm:"primaryKey" json:"id"`
-	CotizacionID     uint      `gorm:"not null;index" json:"cotizacionId"`
+	ID uint `gorm:"primaryKey" json:"id"`
+	// El índice compuesto (cotizacion_id, created_at) acelera la carga del
+	// historial de un hilo ordenado cronológicamente y el fetch incremental
+	// por desdeID (CU-12, ver docs/roadmap.md "Escalabilidad de conversaciones").
+	CotizacionID     uint      `gorm:"not null;index:idx_cotizacion_mensajes_hilo,priority:1" json:"cotizacionId"`
 	Remitente        string    `gorm:"size:20;not null" json:"remitente"`
 	Contenido        string    `gorm:"type:text;not null" json:"-"` // cifrado en reposo
 	LeidoPorCliente  bool      `gorm:"default:false" json:"leidoPorCliente"`
 	LeidoPorVendedor bool      `gorm:"default:false" json:"leidoPorVendedor"`
-	CreatedAt        time.Time `json:"createdAt"`
+	CreatedAt        time.Time `gorm:"index:idx_cotizacion_mensajes_hilo,priority:2" json:"createdAt"`
 }
 
 // TableName define el nombre de la tabla en español.

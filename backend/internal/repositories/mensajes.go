@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"concesionaria/backend/internal/models"
 
@@ -17,9 +16,10 @@ type MensajeRepository interface {
 	// ListarPorConsulta devuelve todos los mensajes de una consulta ordenados
 	// por fecha ascendente.
 	ListarPorConsulta(ctx context.Context, consultaID uint) ([]models.Mensaje, error)
-	// ObtenerNuevos devuelve los mensajes de una consulta posteriores al
-	// timestamp indicado.
-	ObtenerNuevos(ctx context.Context, consultaID uint, desde time.Time) ([]models.Mensaje, error)
+	// ObtenerDesdeID devuelve los mensajes de una consulta con id mayor al
+	// indicado, ordenados cronológicamente. Es el mecanismo para traer en el
+	// polling solo lo nuevo (ver docs/roadmap.md "Escalabilidad de conversaciones").
+	ObtenerDesdeID(ctx context.Context, consultaID uint, desdeID uint) ([]models.Mensaje, error)
 	// MarcarComoLeidos marca como leídos los mensajes de una consulta cuyo
 	// remitente sea el indicado.
 	MarcarComoLeidos(ctx context.Context, consultaID uint, remitenteID uint) error
@@ -74,13 +74,15 @@ func (r *mensajeRepository) ListarPorConsulta(ctx context.Context, consultaID ui
 	return mensajes, nil
 }
 
-// ObtenerNuevos devuelve los mensajes de una consulta posteriores al timestamp.
-func (r *mensajeRepository) ObtenerNuevos(ctx context.Context, consultaID uint, desde time.Time) ([]models.Mensaje, error) {
+// ObtenerDesdeID devuelve los mensajes de una consulta con id mayor al
+// indicado. Se ordena por id porque es monotónico y el índice compuesto de la
+// tabla ya cubre la consulta por hilo.
+func (r *mensajeRepository) ObtenerDesdeID(ctx context.Context, consultaID uint, desdeID uint) ([]models.Mensaje, error) {
 	var mensajes []models.Mensaje
 	err := r.base.WithContext(ctx).
-		Where("consulta_id = ? AND created_at > ?", consultaID, desde).
+		Where("consulta_id = ? AND id > ?", consultaID, desdeID).
 		Preload("Remitente").
-		Order("created_at ASC").
+		Order("id ASC").
 		Find(&mensajes).Error
 	if err != nil {
 		return nil, fmt.Errorf("obtener mensajes nuevos: %w", err)

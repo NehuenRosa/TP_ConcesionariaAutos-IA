@@ -25,8 +25,13 @@ import (
 
 // Límites de entrada del chatbot.
 const (
-	LargoMaximoMensaje     = 1000
-	MaximoTurnosHistorial  = 20
+	LargoMaximoMensaje = 1000
+	// MaximoTurnosHistorial limita cuántos turnos previos (pares usuario/IA)
+	// se envían al LLM como contexto. Es exclusivamente la memoria del modelo:
+	// el historial completo se conserva y se muestra en la UI; el frontend y
+	// los servicios de conversación solo recortan lo que entra al prompt
+	// (ver docs/roadmap.md "Escalabilidad de conversaciones").
+	MaximoTurnosHistorial  = 10
 	MaximoImagenesTasacion = 5
 	MaximoPesoImagenBytes  = 5 * 1024 * 1024
 	TimeoutChatbot         = 120 * time.Second

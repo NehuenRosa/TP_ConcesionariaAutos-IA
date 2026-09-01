@@ -76,44 +76,54 @@ export function MisConsultas() {
               const activa = seleccionada?.id === consulta.id
               const estado = consulta.estado as EstadoConsulta
               return (
-                <button
+                <div
                   key={consulta.id}
-                  type="button"
-                  onClick={() => navigate(`/mis-consultas/${consulta.id}`)}
-                  className={`relative w-full p-4 text-left transition-colors ${
+                  className={`flex items-stretch transition-colors ${
                     activa ? 'bg-white/6' : 'hover:bg-white/4'
                   }`}
                 >
-                  {consulta.mensajesNuevos > 0 && (
-                    <span className="absolute top-3 right-3 h-2.5 w-2.5">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-acento-400 opacity-60" />
-                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-acento-400" />
-                    </span>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/mis-consultas/${consulta.id}`)}
+                    className="relative min-w-0 flex-1 p-4 text-left"
+                  >
+                    {consulta.mensajesNuevos > 0 && (
+                      <span className="absolute top-3 right-3 h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-acento-400 opacity-60" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-acento-400" />
+                      </span>
+                    )}
 
-                  <div className="flex items-center gap-2 pr-4">
-                    <h3 className="truncate font-display text-sm font-semibold text-plata-100">
-                      {consulta.vehiculo.marca} {consulta.vehiculo.modelo}
-                    </h3>
-                  </div>
-                  <div className="mt-2">
-                    <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
-                  </div>
+                    <div className="flex items-center gap-2 pr-4">
+                      <h3 className="truncate font-display text-sm font-semibold text-plata-100">
+                        {consulta.vehiculo.marca} {consulta.vehiculo.modelo}
+                      </h3>
+                    </div>
+                    <div className="mt-2">
+                      <EtiquetaEstado estado={estado} estilos={estilosEstadoConsulta} etiqueta={etiquetasEstadoConsulta[estado]} />
+                    </div>
 
-                  {consulta.vendedor && (
-                    <p className="mt-2 text-xs text-plata-400">
-                      Vendedor: <span className="text-plata-300">{consulta.vendedor.nombre}</span>
-                    </p>
-                  )}
+                    {consulta.vendedor && (
+                      <p className="mt-2 text-xs text-plata-400">
+                        Vendedor: <span className="text-plata-300">{consulta.vendedor.nombre}</span>
+                      </p>
+                    )}
 
-                  {consulta.ultimoMensaje && (
-                    <p className="mt-1 truncate text-sm text-plata-400">
-                      {consulta.ultimoMensaje.contenido}
-                    </p>
-                  )}
+                    {consulta.ultimoMensaje && (
+                      <p className="mt-1 truncate text-sm text-plata-400">
+                        {consulta.ultimoMensaje.contenido}
+                      </p>
+                    )}
 
-                  <p className="mt-1 text-xs text-plata-500">{formatearFechaHora(consulta.updatedAt)}</p>
-                </button>
+                    <p className="mt-1 text-xs text-plata-500">{formatearFechaHora(consulta.updatedAt)}</p>
+                  </button>
+                  <Link
+                    to={`/catalogo/${consulta.vehiculo.id}`}
+                    className="flex shrink-0 items-center px-4 text-xs font-semibold text-acento-400 transition-colors hover:text-acento-300"
+                  >
+                    Ver ficha
+                  </Link>
+                </div>
               )
             })}
           </div>
@@ -125,6 +135,7 @@ export function MisConsultas() {
           <ChatConsulta
             consultaId={seleccionada.id}
             estado={seleccionada.estado}
+            vehiculoId={seleccionada.vehiculo.id}
             onMensajeEnviado={cargarConsultas}
           />
         ) : idInvalido ? (

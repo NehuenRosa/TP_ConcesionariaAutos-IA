@@ -250,11 +250,12 @@ func (f *fakeCotizacionRepository) Crear(_ context.Context, cotizacion *models.C
 		cotizacion.Mensajes[i].ID = f.siguienteMensaje
 		f.siguienteMensaje++
 	}
-	// Se guarda una copia: el servicio descifra en el modelo recibido y no debe
-	// afectar al valor persistido.
+	// Se guarda una copia cifrada: el servicio descifra el modelo que devuelve
+	// y eso no debe afectar al valor persistido.
 	copia := copiarCotizacion(cotizacion)
 	f.porID[cotizacion.ID] = &copia
-	return &copia, nil
+	devuelta := copiarCotizacion(&copia)
+	return &devuelta, nil
 }
 
 func (f *fakeCotizacionRepository) AgregarMensaje(_ context.Context, mensaje *models.MensajeCotizacion) error {
@@ -274,6 +275,32 @@ func (f *fakeCotizacionRepository) ObtenerPorID(_ context.Context, id uint) (*mo
 		return &copia, nil
 	}
 	return nil, gorm.ErrRecordNotFound
+}
+
+func (f *fakeCotizacionRepository) ObtenerCabecera(_ context.Context, id uint) (*models.Cotizacion, error) {
+	return f.ObtenerPorID(context.Background(), id)
+}
+
+func (f *fakeCotizacionRepository) ObtenerMensajesDesde(_ context.Context, cotizacionID uint, desdeID uint) ([]models.MensajeCotizacion, error) {
+	cotizacion, ok := f.porID[cotizacionID]
+	if !ok {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var mensajes []models.MensajeCotizacion
+	for _, m := range cotizacion.Mensajes {
+		if m.ID > desdeID {
+			mensajes = append(mensajes, m)
+		}
+	}
+	return mensajes, nil
+}
+
+func (f *fakeCotizacionRepository) ContarMensajes(_ context.Context, cotizacionID uint) (int64, error) {
+	cotizacion, ok := f.porID[cotizacionID]
+	if !ok {
+		return 0, gorm.ErrRecordNotFound
+	}
+	return int64(len(cotizacion.Mensajes)), nil
 }
 
 func (f *fakeCotizacionRepository) ListarPorCliente(_ context.Context, clienteID uint) ([]models.Cotizacion, error) {
@@ -307,7 +334,7 @@ func (f *fakeCotizacionRepository) ContarNoLeidosDeCliente(_ context.Context, cl
 			continue
 		}
 		for _, m := range c.Mensajes {
-			if m.Remitente == models.RemitenteVendedor && !m.LeidoPorCliente {
+			if m.Remitente != models.RemitenteCliente && !m.LeidoPorCliente {
 				total++
 			}
 		}

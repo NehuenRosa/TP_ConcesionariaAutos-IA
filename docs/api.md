@@ -315,9 +315,12 @@ Elimina la consulta.
 
 Historial de mensajes de la consulta (cliente participante o vendedor).
 
-### `GET /consultas/:id/mensajes/nuevos`
+### `GET /consultas/:id/mensajes/nuevos?desdeId=`
 
-Mensajes nuevos (no leídos) desde la última consulta.
+Mensajes nuevos (con `id > desdeId`) para el polling incremental del chat.
+`desdeId=0` devuelve el historial completo. Devuelve un array plano; usar la
+última `id` de la respuesta como `desdeId` del siguiente pedido en lugar del
+timestamp, para no saltearse mensajes de un mismo segundo.
 
 ### `POST /consultas/:id/mensajes`
 
@@ -478,9 +481,13 @@ sin respuesta automática) y solo el vendedor que la tomó puede responder.
 | `PUT /cotizaciones/:id/tomar` *(vendedor)* | Asigna la conversación al vendedor autenticado y silencia la IA. Idempotente para el mismo vendedor; `409` si otro vendedor la tomó o está cerrada. |
 | `POST /cotizaciones/:id/mensajes-vendedor` *(vendedor)* | Guarda el mensaje del vendedor (remitente `vendedor`) sin pasar por la IA. `400` sin haberla tomado o mensaje vacío/muy largo; `403` si la tomó otro vendedor; `409` si está cerrada. |
 | `PUT /cotizaciones/:id/cerrar-personal` *(vendedor)* | Cierra la cotización desde el personal. |
+| `GET /cotizaciones/:id/mensajes?desdeId=` | Fetch incremental del hilo (cliente). Devuelve `{ mensajes, total, estado, vendedor, fechaToma }` con los mensajes de `id > desdeId` ya descifrados; `desdeId=0` devuelve el historial completo. |
+| `GET /cotizaciones/:id/mensajes/personal?desdeId=` *(vendedor)* | Igual que el anterior pero desde la vista del personal (marca los mensajes como leídos). |
 
 El cliente ve en su panel quién lo atiende (`vendedor`) y los mensajes del
-personal con remitente `vendedor`; ambos lados refrescan cada 10 s.
+personal con remitente `vendedor`; ambos lados refrescan cada 10 s trayendo
+solo lo nuevo (fetch incremental por `desdeId`): el historial completo se baja
+una sola vez al abrir el hilo.
 
 ## Roles en los endpoints
 

@@ -85,33 +85,43 @@ export function MisCotizaciones() {
             {cotizaciones.map((cotizacion) => {
               const activa = seleccionada?.id === cotizacion.id
               return (
-                <button
+                <div
                   key={cotizacion.id}
-                  type="button"
-                  onClick={() => navigate(`/mis-cotizaciones/${cotizacion.id}`)}
-                  className={`relative w-full p-4 text-left transition-colors ${
+                  className={`flex items-stretch transition-colors ${
                     activa ? 'bg-white/6' : 'hover:bg-white/4'
                   }`}
                 >
-                  <div className="flex items-center gap-2 pr-4">
-                    <h3 className="truncate font-display text-sm font-semibold text-plata-100">
-                      {cotizacion.vehiculo.marca} {cotizacion.vehiculo.modelo}
-                    </h3>
-                  </div>
-                  <div className="mt-2">
-                    <EtiquetaCotizacion estado={cotizacion.estado} />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/mis-cotizaciones/${cotizacion.id}`)}
+                    className="min-w-0 flex-1 p-4 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <h3 className="truncate font-display text-sm font-semibold text-plata-100">
+                        {cotizacion.vehiculo.marca} {cotizacion.vehiculo.modelo}
+                      </h3>
+                    </div>
+                    <div className="mt-2">
+                      <EtiquetaCotizacion estado={cotizacion.estado} />
+                    </div>
 
-                  {cotizacion.ultimoMensaje && (
-                    <p className="mt-1 truncate text-sm text-plata-400">
-                      {cotizacion.ultimoMensaje.contenido}
+                    {cotizacion.ultimoMensaje && (
+                      <p className="mt-1 truncate text-sm text-plata-400">
+                        {cotizacion.ultimoMensaje.contenido}
+                      </p>
+                    )}
+
+                    <p className="mt-1 text-xs text-plata-500">
+                      {formatearFechaHora(cotizacion.updatedAt)}
                     </p>
-                  )}
-
-                  <p className="mt-1 text-xs text-plata-500">
-                    {formatearFechaHora(cotizacion.updatedAt)}
-                  </p>
-                </button>
+                  </button>
+                  <Link
+                    to={`/catalogo/${cotizacion.vehiculo.id}`}
+                    className="flex shrink-0 items-center px-4 text-xs font-semibold text-acento-400 transition-colors hover:text-acento-300"
+                  >
+                    Ver ficha
+                  </Link>
+                </div>
               )
             })}
           </div>

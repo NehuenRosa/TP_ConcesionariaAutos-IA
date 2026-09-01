@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   listarMisConsultas: vi.fn(),
   obtenerMensajes: vi.fn(),
   marcarComoLeidos: vi.fn(),
-  obtenerMensajesNuevos: vi.fn(),
+  obtenerMensajesConsultaDesde: vi.fn(),
   enviarMensaje: vi.fn(),
 }))
 
@@ -87,7 +87,7 @@ describe('MisConsultas', () => {
     vi.mocked(api.listarMisConsultas).mockResolvedValue([consulta()])
     vi.mocked(api.obtenerMensajes).mockResolvedValue([])
     vi.mocked(api.marcarComoLeidos).mockResolvedValue(undefined)
-    vi.mocked(api.obtenerMensajesNuevos).mockResolvedValue([])
+    vi.mocked(api.obtenerMensajesConsultaDesde).mockResolvedValue([])
 
     renderizar('/mis-consultas/1')
 
