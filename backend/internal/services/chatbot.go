@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"google.golang.org/api/googleapi"
 
 	"concesionaria/backend/internal/cifrado"
 	"concesionaria/backend/internal/models"
@@ -20,7 +23,6 @@ import (
 
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/googleai"
-	"github.com/tmc/langchaingo/llms/ollama"
 )
 
 // Límites de entrada del chatbot.
@@ -36,10 +38,13 @@ const (
 	MaximoPesoImagenBytes  = 5 * 1024 * 1024
 	TimeoutChatbot         = 120 * time.Second
 	TimeoutVision          = 120 * time.Second
-	// Contexto (num_ctx) y salida máxima por modelo, ajustados para 8 GB de VRAM.
-	NumCtxChatbot   = 4096
-	NumCtxVision    = 2048
+	// MaxTokensSalida es la salida máxima por modelo.
 	MaxTokensSalida = 600
+	// Reintentos ante errores transitorios de Gemini (503 UNAVAILABLE por picos
+	// de demanda, 429 por cuota). La API de Google recomienda reintentar porque
+	// los picos son temporales; la espera crece en forma exponencial (1s, 2s).
+	MaximosReintentosGoogleAI = 3
+	EsperaBaseReintento      = 1 * time.Second
 )
 
 // Errores de negocio del chatbot.
@@ -58,7 +63,7 @@ var (
 	ErrTasacionNoEncontrada = errors.New("no hay una tasación pendiente para esa sesión")
 )
 
-// Mensajes de degradación cuando el modelo local no está disponible.
+// Mensajes de degradación cuando el modelo no está disponible.
 const (
 	respuestaFallbackChat = "Disculpá, ahora mismo no puedo responder. " +
 		"Podés consultar el catálogo, crear una consulta sobre un vehículo o pedir " +
@@ -146,17 +151,15 @@ type ChatbotService interface {
 	GenerarCotizacion(ctx context.Context, vehiculo models.Vehiculo, historial []TurnoChat, mensaje string) (string, error)
 }
 
-// Proveedores de LLM soportados.
+// Proveedor de LLM soportado.
 const (
-	// ProveedorGoogleAI usa Gemini en la nube (recomendado: no consume
-	// recursos locales y ofrece contexto de 1M de tokens).
+	// ProveedorGoogleAI usa Gemini en la nube (no consume recursos locales
+	// y ofrece contexto de 1M de tokens).
 	ProveedorGoogleAI = "googleai"
-	// ProveedorOllama usa un modelo local vía Ollama.
-	ProveedorOllama = "ollama"
 )
 
 // chatbotService implementa ChatbotService con LangChain y un LLM provisto por
-// Google AI (Gemini, en la nube) u Ollama (local).
+// Google AI (Gemini, en la nube).
 type chatbotService struct {
 	repositorioVehiculos    repositories.VehiculoRepository
 	repositorioTasaciones   repositories.TasacionRepository
@@ -164,22 +167,15 @@ type chatbotService struct {
 	cifrador                cifrado.Cifrador
 	proveedor               string
 	googleAIKey             string
-	ollamaURL               string
 	modeloChatbot           string
 	modeloVision            string
 	precios                 ServicioPrecios
 }
 
-// NuevoChatbotService crea el servicio del asistente conversacional. Si
-// proveedor está vacío, elige Google AI cuando hay clave configurada y Ollama
-// como respaldo.
-func NuevoChatbotService(repositorioVehiculos repositories.VehiculoRepository, repositorioTasaciones repositories.TasacionRepository, repositorioCotizaciones repositories.CotizacionRepository, cifrador cifrado.Cifrador, proveedor string, googleAIKey string, ollamaURL string, modeloChatbot string, modeloVision string, precios ServicioPrecios) ChatbotService {
+// NuevoChatbotService crea el servicio del asistente conversacional.
+func NuevoChatbotService(repositorioVehiculos repositories.VehiculoRepository, repositorioTasaciones repositories.TasacionRepository, repositorioCotizaciones repositories.CotizacionRepository, cifrador cifrado.Cifrador, proveedor string, googleAIKey string, modeloChatbot string, modeloVision string, precios ServicioPrecios) ChatbotService {
 	if proveedor == "" {
-		if googleAIKey != "" {
-			proveedor = ProveedorGoogleAI
-		} else {
-			proveedor = ProveedorOllama
-		}
+		proveedor = ProveedorGoogleAI
 	}
 	return &chatbotService{
 		repositorioVehiculos:    repositorioVehiculos,
@@ -188,7 +184,6 @@ func NuevoChatbotService(repositorioVehiculos repositories.VehiculoRepository, r
 		cifrador:                cifrador,
 		proveedor:               proveedor,
 		googleAIKey:             googleAIKey,
-		ollamaURL:               ollamaURL,
 		modeloChatbot:           modeloChatbot,
 		modeloVision:            modeloVision,
 		precios:                 precios,
@@ -214,7 +209,7 @@ func (s *chatbotService) Responder(ctx context.Context, clienteID uint, mensaje 
 	}
 
 	mensajes := s.construirMensajes(contexto, historial, mensaje)
-	respuesta, err := s.generar(ctx, s.modeloChatbot, mensajes, NumCtxChatbot, TimeoutChatbot)
+	respuesta, err := s.generar(ctx, s.modeloChatbot, mensajes, TimeoutChatbot)
 	if err != nil {
 		slog.Error("Error al generar respuesta del chatbot", "error", err.Error())
 		return RespuestaChat{Respuesta: respuestaFallbackChat}, nil
@@ -379,7 +374,7 @@ func (s *chatbotService) identificarVehiculo(ctx context.Context, descripcion st
 		{Role: llms.ChatMessageTypeHuman, Parts: partes},
 	}
 
-	respuesta, err := s.generar(ctx, s.modeloVision, mensajes, NumCtxVision, TimeoutVision)
+	respuesta, err := s.generar(ctx, s.modeloVision, mensajes, TimeoutVision)
 	if err != nil {
 		slog.Error("Error al identificar el vehículo del chatbot", "error", err.Error())
 		return identificacionVehiculo{}, err
@@ -438,7 +433,7 @@ func (s *chatbotService) extraerVisita(ctx context.Context, mensaje string) (vis
 		},
 	}
 
-	respuesta, err := s.generar(ctx, s.modeloChatbot, mensajes, NumCtxChatbot, TimeoutChatbot)
+	respuesta, err := s.generar(ctx, s.modeloChatbot, mensajes, TimeoutChatbot)
 	if err != nil {
 		slog.Error("Error al extraer día y franja del chatbot", "error", err.Error())
 		return visitaTasacion{}, err
@@ -673,7 +668,7 @@ func (s *chatbotService) GenerarCotizacion(ctx context.Context, vehiculo models.
 	sistema := strings.Replace(promptCotizacion, "{{ficha}}", ficha, 1)
 	sistema = strings.Replace(sistema, "{{condiciones}}", textoCondicionesComerciales(vehiculo.Precio), 1)
 
-	respuesta, err := s.generar(ctx, s.modeloChatbot, construirMensajesDesde(sistema, historial, mensaje), NumCtxChatbot, TimeoutChatbot)
+	respuesta, err := s.generar(ctx, s.modeloChatbot, construirMensajesDesde(sistema, historial, mensaje), TimeoutChatbot)
 	if err != nil {
 		slog.Error("Error al generar respuesta de cotización", "error", err.Error())
 		return respuestaFallbackChat, nil
@@ -825,46 +820,15 @@ func capitalizar(texto string) string {
 	return strings.ToUpper(texto[:1]) + texto[1:]
 }
 
-// generar despacha la generación al proveedor de LLM configurado. numCtx solo
-// aplica a Ollama (ventana de contexto local); en la nube se ignora.
-func (s *chatbotService) generar(ctx context.Context, modelo string, mensajes []llms.MessageContent, numCtx int, timeout time.Duration) (string, error) {
-	switch s.proveedor {
-	case ProveedorGoogleAI:
-		return s.generarConGoogleAI(ctx, modelo, mensajes, timeout)
-	default:
-		return s.generarConOllama(ctx, modelo, mensajes, numCtx, timeout)
-	}
-}
-
-// generarConOllama conecta con Ollama y devuelve la respuesta de texto del
-// modelo local. keepAlive mantiene el modelo cargado en memoria entre
-// consultas para reducir latencia.
-func (s *chatbotService) generarConOllama(ctx context.Context, modelo string, mensajes []llms.MessageContent, numCtx int, timeout time.Duration) (string, error) {
-	modeloLocal, err := ollama.New(
-		ollama.WithServerURL(s.ollamaURL),
-		ollama.WithModel(modelo),
-		ollama.WithRunnerNumCtx(numCtx),
-		ollama.WithKeepAlive("20m"),
-	)
-	if err != nil {
-		return "", fmt.Errorf("crear cliente de Ollama: %w", err)
-	}
-
-	ctxConTimeout, cancelar := context.WithTimeout(ctx, timeout)
-	defer cancelar()
-
-	respuesta, err := modeloLocal.GenerateContent(ctxConTimeout, mensajes, llms.WithMaxTokens(MaxTokensSalida))
-	if err != nil {
-		return "", err
-	}
-	if len(respuesta.Choices) == 0 || strings.TrimSpace(respuesta.Choices[0].Content) == "" {
-		return "", errors.New("el modelo no devolvió contenido")
-	}
-	return strings.TrimSpace(respuesta.Choices[0].Content), nil
+// generar delega la generación al proveedor de LLM configurado.
+func (s *chatbotService) generar(ctx context.Context, modelo string, mensajes []llms.MessageContent, timeout time.Duration) (string, error) {
+	return s.generarConGoogleAI(ctx, modelo, mensajes, timeout)
 }
 
 // generarConGoogleAI genera con Gemini en la nube. El mismo modelo soporta
 // texto y visión, por eso el mismo camino sirve para el chat y la tasación.
+// Replica los errores transitorios (503 por picos de demanda, 429 de cuota y
+// otros 5xx) con espera exponencial, porque suelen ser pasajeros.
 func (s *chatbotService) generarConGoogleAI(ctx context.Context, modelo string, mensajes []llms.MessageContent, timeout time.Duration) (string, error) {
 	modeloNube, err := googleai.New(ctx, googleai.WithAPIKey(s.googleAIKey))
 	if err != nil {
@@ -875,17 +839,57 @@ func (s *chatbotService) generarConGoogleAI(ctx context.Context, modelo string, 
 	ctxConTimeout, cancelar := context.WithTimeout(ctx, timeout)
 	defer cancelar()
 
-	respuesta, err := modeloNube.GenerateContent(ctxConTimeout, mensajes,
-		llms.WithModel(modelo),
-		llms.WithMaxTokens(MaxTokensSalida),
-	)
-	if err != nil {
-		return "", err
+	var respuesta *llms.ContentResponse
+	for intento := 0; intento <= MaximosReintentosGoogleAI; intento++ {
+		if intento > 0 {
+			espera := EsperaBaseReintento << (intento - 1)
+			select {
+			case <-ctxConTimeout.Done():
+				return "", err
+			case <-time.After(espera):
+			}
+		}
+
+		respuesta, err = modeloNube.GenerateContent(ctxConTimeout, mensajes,
+			llms.WithModel(modelo),
+			llms.WithMaxTokens(MaxTokensSalida),
+		)
+		if err == nil {
+			break
+		}
+		if !esErrorTransitorioGoogleAI(err) || intento == MaximosReintentosGoogleAI {
+			return "", err
+		}
+		slog.Info("Gemini transitoriamente no disponible, reintentando",
+			"modelo", modelo, "intento", intento+1, "error", err.Error())
 	}
 	if len(respuesta.Choices) == 0 || strings.TrimSpace(respuesta.Choices[0].Content) == "" {
 		return "", errors.New("el modelo no devolvió contenido")
 	}
 	return strings.TrimSpace(respuesta.Choices[0].Content), nil
+}
+
+// esErrorTransitorioGoogleAI indica si el error de Gemini responde a una
+// condición temporal (503 UNAVAILABLE por alta demanda, 429 por cuota o
+// cualquier 5xx) que justifica reintentar. Reconoce el error tipado de la API
+// de Google, el mapeado por langchaingo y el texto por las dudas.
+func esErrorTransitorioGoogleAI(err error) bool {
+	var errAPI *googleapi.Error
+	if errors.As(err, &errAPI) {
+		return errAPI.Code == http.StatusTooManyRequests || errAPI.Code >= http.StatusInternalServerError
+	}
+	var errLangchaingo *llms.Error
+	if errors.As(err, &errLangchaingo) {
+		return errLangchaingo.Code == llms.ErrCodeRateLimit || errLangchaingo.Code == llms.ErrCodeProviderUnavailable
+	}
+	texto := strings.ToLower(err.Error())
+	return strings.Contains(texto, "503") ||
+		strings.Contains(texto, "429") ||
+		strings.Contains(texto, "service unavailable") ||
+		strings.Contains(texto, "unavailable") ||
+		strings.Contains(texto, "high demand") ||
+		strings.Contains(texto, "quota") ||
+		strings.Contains(texto, "rate limit")
 }
 
 // promptSistema es el prompt base del asistente con el contexto inyectado.

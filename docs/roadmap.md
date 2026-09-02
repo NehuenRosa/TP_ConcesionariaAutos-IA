@@ -14,7 +14,7 @@ Cada caso de uso se planifica con un change propio cuando se vaya a implementar.
 | CU-07 | Turno de test drive | Implementado |
 | CU-08 | Reserva de vehículo | Implementado (con seña y comprobante) |
 | CU-09 | Panel de administración (dashboard) | Implementado |
-| CU-10 | Chatbot asistente (LangChain + Gemini/Ollama) | Resuelto |
+| CU-10 | Chatbot asistente (LangChain + Gemini en la nube) | Resuelto |
 | CU-11 | Login con Google (Google Identity Services + JWT propio) | Implementado |
 | CU-12 | Bandeja de cotizaciones con IA para el vendedor | Implementado |
 

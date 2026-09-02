@@ -6,7 +6,7 @@
 #   - Secretos obligatorios (BD_PASSWORD, JWT_SECRETO): fallan rápido si faltan
 #     (fail-fast con `${VAR:?...}`) en lugar de defaults inseguros.
 #   - Redes segmentadas: `red-publica` (frontend + backend) y `red-interna`
-#     (backend + postgres + ollama). Postgres y ollama no quedan en la red pública.
+#     (backend + postgres). Postgres no queda en la red pública.
 #   - Puertos publicados solo en loopback (127.0.0.1): no se exponen a la red.
 #   - Contenedores no-root (`user:`), capabilities mínimas (`cap_drop: [ALL]`
 #     + `cap_add` mínimo) y `security_opt: no-new-privileges`.
@@ -87,14 +87,10 @@ services:
       # el backend usa JWT_SECRETO como respaldo.
       CLAVE_ENCRIPTACION: ${CLAVE_ENCRIPTACION:-}
       CORS_ORIGENES: ${CORS_ORIGENES:-*}
-      # LLM: por defecto Gemini en la nube (googleai) si hay GOOGLE_API_KEY.
-      # Sin clave cae a Ollama local (host.docker.internal).
+      # LLM: Gemini en la nube (googleai) con GOOGLE_API_KEY.
       PROVEEDOR_LLM: ${PROVEEDOR_LLM:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
-      OLLAMA_URL: http://host.docker.internal:11434
-      # Modelos vacíos = el backend elige el default según el proveedor:
-      # googleai -> gemini-flash-lite-latest (texto + visión); ollama -> llama3 /
-      # minicpm-v.
+      # Modelos vacíos = el backend elige el default (gemini-3.5-flash-lite).
       MODELO_CHATBOT: ${MODELO_CHATBOT:-}
       MODELO_VISION: ${MODELO_VISION:-}
       ARGAUTOS_URL: ${ARGAUTOS_URL:-https://argautos.com/api/v1}
@@ -135,54 +131,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-
-  ollama:
-    # Opcional: por defecto el backend usa el Ollama nativo del host
-    # (OLLAMA_URL=http://host.docker.internal:11434). Para levantar Ollama en
-    # contenedor (con GPU) en vez del nativo:
-    #   docker compose --profile ollama-contenedor up -d
-    profiles: ["ollama-contenedor"]
-    image: ollama/ollama:0.32.13
-    container_name: concesionaria-ollama
-    restart: unless-stopped
-    init: true
-    stop_grace_period: 30s
-    ports:
-      # Loopback para probar la API desde el host (ej. curl). El backend la
-      # alcanza por la red interna; eliminá esta línea si no la necesitás.
-      - "127.0.0.1:11434:11434"
-    environment:
-      OLLAMA_HOST: 0.0.0.0
-      # Ajustes para 8 GB de VRAM: un solo modelo cargado, un request a la vez
-      # y contexto limitado para que el modelo quepa junto al resto del sistema.
-      OLLAMA_MAX_LOADED_MODELS: "1"
-      OLLAMA_NUM_PARALLEL: "1"
-      OLLAMA_CONTEXT_LENGTH: "4096"
-    volumes:
-      - datos-ollama:/root/.ollama
-    networks:
-      - red-interna
-    # GPU: requiere NVIDIA Container Toolkit. En máquinas sin GPU, quitar este
-    # bloque para que Ollama corra por CPU.
-    gpus: all
-    cap_drop:
-      - ALL
-    cap_add:
-      # Necesaria para fijar la memoria del modelo en RAM (CUDA/GPU).
-      - IPC_LOCK
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
 
   frontend:
     build:
@@ -229,7 +177,6 @@ services:
 
 volumes:
   datos-postgres:
-  datos-ollama:
 
 networks:
   red-publica:

@@ -12,7 +12,7 @@ stock real y tasa el auto del usuario por fotos con valores de la Guía de la CC
 | Backend | Go + Gin + GORM + JWT |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS |
 | Base de datos | PostgreSQL |
-| Chatbot | LangChain (langchaingo) conectado a **Google AI Gemini en la nube** (`googleai`, por defecto) u **Ollama local** como respaldo (`ollama`); tasación con valores reales de la Guía de la CCA vía API de ArgAutos |
+| Chatbot | LangChain (langchaingo) conectado a **Google AI Gemini en la nube** (`googleai`); tasación con valores reales de la Guía de la CCA vía API de ArgAutos |
 | Infra | Docker + Docker Compose |
 
 ## Estructura del repositorio
@@ -43,7 +43,7 @@ stock real y tasa el auto del usuario por fotos con valores de la Guía de la CC
 │       └── test/            # Setup de tests (Vitest + Testing Library)
 ├── openspec/                # OpenSpec: specs + changes (uno por CU)
 ├── docs/                    # Documentación (roadmap, despliegue, API, frontend)
-├── docker-compose.yml       # postgres + backend + frontend (+ ollama opcional)
+├── docker-compose.yml       # postgres + backend + frontend
 ├── .env.example             # Variables de entorno de ejemplo
 ├── AGENTS.md                # Guía de contexto para agentes de IA
 └── render.yaml              # Blueprint de despliegue en Render (nube)
@@ -53,8 +53,8 @@ stock real y tasa el auto del usuario por fotos con valores de la Guía de la CC
 
 ### Con Docker (recomendado)
 
-Levanta PostgreSQL, backend y frontend. El chatbot usa **Gemini en la nube** si
-configuraste `GOOGLE_API_KEY`, o el **Ollama nativo del host** como respaldo.
+Levanta PostgreSQL, backend y frontend. El chatbot usa **Gemini en la nube**
+(configurá `GOOGLE_API_KEY`).
 
 ```powershell
 # 1. Preparar variables de entorno (editar y completar BD_PASSWORD y JWT_SECRETO)
@@ -76,18 +76,8 @@ docker compose down
 docker compose down -v
 ```
 
-> **Ollama opcional**: por defecto el backend usa el Ollama nativo del host
-> (`http://host.docker.internal:11434`), sin contenedores extra. Si preferís
-> Ollama en contenedor (con GPU, requiere NVIDIA Container Toolkit), levantarlo
-> aparte:
->
-> ```powershell
-> docker compose --profile ollama-contenedor up -d
-> ```
->
-> Los modelos se descargan una vez con `ollama pull llama3` y
-> `ollama pull minicpm-v` (nativo) o `docker compose --profile ollama-contenedor
-> exec ollama ollama pull ...` (contenedor).
+> **Ollama**: este proyecto ya no usa Ollama. El LLM es exclusivamente Gemini en
+> la nube.
 
 ### Sin Docker
 
@@ -129,11 +119,10 @@ Ver `.env.example`. Las principales:
 | `BD_SSL` | Modo SSL de la conexión | `disable` |
 | `JWT_SECRETO` | Secreto para firmar tokens JWT (**obligatorio** en compose) | `cambiar-en-produccion` |
 | `CORS_ORIGENES` | Orígenes permitidos por CORS | `*` |
-| `PROVEEDOR_LLM` | `googleai` (nube) u `ollama` (local); vacío = googleai si hay `GOOGLE_API_KEY`, si no ollama | *(vacío)* |
+| `PROVEEDOR_LLM` | Proveedor del LLM (único soportado: `googleai`) | *(vacío → `googleai`)* |
 | `GOOGLE_API_KEY` | API key de Gemini (gratis en Google AI Studio) | *(vacío)* |
-| `OLLAMA_URL` | URL de Ollama (en Docker: `http://host.docker.internal:11434`) | `http://localhost:11434` |
-| `MODELO_CHATBOT` | Modelo de chat / comparación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `llama3` |
-| `MODELO_VISION` | Modelo de visión para la tasación (vacío = default según proveedor) | `gemini-flash-lite-latest` / `minicpm-v` |
+| `MODELO_CHATBOT` | Modelo de chat / comparación (vacío = default) | `gemini-3.5-flash-lite` |
+| `MODELO_VISION` | Modelo de visión para la tasación (vacío = default) | `gemini-3.5-flash-lite` |
 | `ARGAUTOS_URL` | API de valores de la Guía de la CCA (tasación) | `https://argautos.com/api/v1` |
 | `GOOGLE_CLIENT_ID` | Client ID OAuth de Google para "Continuar con Google" (CU-11); vacío = deshabilitado | *(vacío)* |
 | `CBU_CONCESIONARIA` | CBU mostrado al cliente para transferir la seña de la reserva (CU-08); vacío = la UI avisa que el personal pasa los datos | *(vacío)* |
@@ -142,9 +131,8 @@ Ver `.env.example`. Las principales:
 
 > En producción, cambiar siempre `JWT_SECRETO` y no exponer `GOOGLE_API_KEY` en
 > el repositorio (vive solo en `.env` local o en variables de Render). El
-> backend elige el modelo por defecto según el proveedor: googleai →
-> `gemini-flash-lite-latest` (1M de contexto, texto + visión, gratis para
-> cuentas nuevas), ollama → `llama3` (chat) y `minicpm-v` (visión).
+> backend usa por defecto el modelo `gemini-3.5-flash-lite` (1M de contexto,
+> texto + visión, gratis para cuentas nuevas).
 
 ## Perfiles de prueba
 
@@ -176,11 +164,12 @@ públicos (sin autenticación):
   24 h): el LLM nunca genera montos. Si no se identifica el vehículo o no hay
   valor de referencia, la respuesta es honesta y orienta al usuario.
 
-**Proveedores**: por defecto **Gemini en la nube** (`googleai`, clave
-`GOOGLE_API_KEY`, modelo `gemini-flash-lite-latest`). Si no hay clave o se setea
-`PROVEEDOR_LLM=ollama`, usa **Ollama local** como respaldo. Si el proveedor está
-caído, chat y tasación devuelven `200` con un mensaje en español que orienta al
-usuario (el error interno se loguea).
+**Proveedor**: **Gemini en la nube** (`googleai`, clave `GOOGLE_API_KEY`,
+modelo `gemini-3.5-flash-lite`) — único soportado. Los errores
+transitorios de Gemini (503 por alta demanda, 429 de cuota, otros 5xx) se
+reintentan con espera exponencial; si el proveedor sigue caído, chat y tasación
+devuelven `200` con un mensaje en español que orienta al usuario (el error
+interno se loguea).
 
 ## Documentación detallada
 

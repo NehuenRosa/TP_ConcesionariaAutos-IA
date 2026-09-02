@@ -19,9 +19,10 @@ La configuración ya está en `render.yaml` (blueprint de Render).
 2. Guardarla en la variable de entorno `GOOGLE_API_KEY` del backend en Render
    (y en el `.env` local si querés la nube también en dev).
 
-> Sin `GOOGLE_API_KEY`, el backend usa Ollama local como respaldo. En la nube
-> conviene siempre usar Gemini: el free tier de `gemini-flash-lite-latest` (1M de
-> contexto, texto + visión) alcanza para una demo sin costo.
+> El backend usa **Google AI Gemini en la nube** como proveedor del LLM (chat y
+> visión) con la clave `GOOGLE_API_KEY`. El free tier de
+> `gemini-3.5-flash-lite` (1M de contexto, texto + visión) alcanza para una
+> demo sin costo. Este proyecto ya no usa Ollama.
 
 ## 2. Desplegar en Render
 
@@ -60,5 +61,5 @@ La configuración ya está en `render.yaml` (blueprint de Render).
   `docker-compose.yml`. La nube usa `BD_URL` (URL completa) y `PORT` que inyecta
   Render; el backend soporta ambos modos (`backend/internal/config/config.go` y
   `backend/internal/database/database.go`).
-- Chatbot: en ambos entornos `PROVEEDOR_LLM` vacío auto-elige Gemini si hay
-  `GOOGLE_API_KEY`; si no, usa Ollama (en local, el nativo del host).
+- Chatbot: en ambos entornos `PROVEEDOR_LLM` vacío auto-elige Gemini en la nube
+  (requiere `GOOGLE_API_KEY`).
