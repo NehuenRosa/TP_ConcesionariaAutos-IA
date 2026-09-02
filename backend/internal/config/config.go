@@ -22,11 +22,10 @@ type Configuracion struct {
 	// (AES-256-GCM). Si está vacía se deriva del secreto JWT.
 	ClaveEncriptacion string
 	OrigenesCORS string
-	// ProveedorLLM indica el proveedor del LLM: "googleai" (nube, por defecto
-	// si hay GOOGLE_API_KEY) u "ollama" (local).
+	// ProveedorLLM indica el proveedor del LLM. Actualmente solo se soporta
+	// "googleai" (Gemini en la nube).
 	ProveedorLLM string
 	GoogleAIKey  string
-	OllamaURL    string
 	ModeloChatbot string
 	ModeloVision string
 	ArgAutosURL  string
@@ -51,25 +50,17 @@ type Configuracion struct {
 func Cargar() Configuracion {
 	proveedor := obtener("PROVEEDOR_LLM", "")
 	claveGoogleAI := obtener("GOOGLE_API_KEY", "")
-	// Si no se indica proveedor, se elige googleai cuando hay GOOGLE_API_KEY y
-	// ollama como respaldo local.
+	// Si no se indica proveedor, se elige googleai cuando hay GOOGLE_API_KEY.
 	if proveedor == "" {
-		if claveGoogleAI != "" {
-			proveedor = "googleai"
-		} else {
-			proveedor = "ollama"
-		}
+		proveedor = "googleai"
 	}
-	// Los modelos por defecto dependen del proveedor: Gemini soporta texto +
-	// visión; Ollama usa llama3 para el chat y minicpm-v para la tasación.
-	// gemini-flash-lite-latest es el alias estable del Gemini gratis más
+	// gemini-3.5-flash-lite es una versión estable del Gemini gratis más
 	// liviano (1M de contexto, texto + visión, disponible para cuentas nuevas).
-	modeloChatbotPorDefecto := "llama3"
-	modeloVisionPorDefecto := "minicpm-v"
-	if proveedor == "googleai" {
-		modeloChatbotPorDefecto = "gemini-flash-lite-latest"
-		modeloVisionPorDefecto = "gemini-flash-lite-latest"
-	}
+	// No usar el alias gemini-flash-lite-latest como default: bajo alta demanda
+	// responde 503 UNAVAILABLE ("high demand") y los gemini-2.5.* ya quedaron
+	// retirados para cuentas nuevas (404).
+	modeloChatbotPorDefecto := "gemini-3.5-flash-lite"
+	modeloVisionPorDefecto := "gemini-3.5-flash-lite"
 	return Configuracion{
 		Host:         obtener("HOST_API", "0.0.0.0"),
 		// PORT lo inyecta Render en la nube; localmente sigue PUERTO_API.
@@ -86,7 +77,6 @@ func Cargar() Configuracion {
 		OrigenesCORS:  obtener("CORS_ORIGENES", "*"),
 		ProveedorLLM:  proveedor,
 		GoogleAIKey:   claveGoogleAI,
-		OllamaURL:     obtener("OLLAMA_URL", "http://localhost:11434"),
 		ModeloChatbot: obtener("MODELO_CHATBOT", modeloChatbotPorDefecto),
 		ModeloVision:  obtener("MODELO_VISION", modeloVisionPorDefecto),
 		ArgAutosURL:   obtener("ARGAUTOS_URL", "https://argautos.com/api/v1"),

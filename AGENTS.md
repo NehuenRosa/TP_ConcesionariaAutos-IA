@@ -32,7 +32,7 @@ vehículos disponibles.
 | CU-07 | Turno de test drive | El cliente solicita turno eligiendo fecha y franja horaria; el sistema valida disponibilidad y evita superposición. |
 | CU-08 | Reserva de vehículo | El cliente reserva una unidad (disponible → reservado) con seña del 5 %: tiene 2 horas para transferir y subir el comprobante; sin comprobante al vencer, la reserva se anula sola y la unidad vuelve a `disponible`. El vendedor revisa el comprobante y confirma la venta o cancela y libera la unidad. |
 | CU-09 | Panel de administración | Dashboard con vehículos por estado, consultas por período, reservas activas y test drives agendados, con gráficos simples. |
-| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Gemini en la nube, con Ollama local de respaldo) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
+| CU-10 | Chatbot asistente | Chat integrado con un asistente (LangChain + Gemini en la nube) que responde en lenguaje natural sobre el stock real, orienta a consultar o pedir un test drive, y tasa el auto del usuario por fotos usando valores reales de la Guía de la CCA (no inventa precios). **Resuelto** (ver `docs/roadmap.md`). |
 | CU-11 | Login con Google | Registro e inicio de sesión federados con Google Identity Services: el frontend envía el credential (ID token), el backend lo verifica contra el JWKS de Google (firma, emisor, audiencia, `email_verified`), crea el cliente o vincula la cuenta existente por email y emite el JWT propio del sistema. Requiere `GOOGLE_CLIENT_ID`; sin él, deshabilitado (`503` y botón oculto). |
 | CU-12 | Bandeja de cotizaciones con IA | El vendedor ve las conversaciones de cotización que los clientes iniciaron con la IA, las toma y responde en su nombre: al tomarlas, la IA queda silenciada y los mensajes del personal se guardan con remitente `vendedor`. El cliente ve quién lo atiende. |
 
@@ -45,7 +45,7 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
 | Backend | Go + Gin (HTTP) + GORM (ORM) + JWT. API REST. |
 | Frontend | React + Vite + TypeScript + React Router + TailwindCSS. |
 | Base de datos | PostgreSQL. |
-| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema y a un LLM provisto por **Google AI Gemini en la nube** (`PROVEEDOR_LLM=googleai`, modelos `MODELO_CHATBOT` y `MODELO_VISION`) u **Ollama local** como respaldo (modelos `MODELO_CHATBOT`/`MODELO_VISION`). La tasación usa valores reales de la Guía Oficial de Precios de la CCA vía API de ArgAutos (`ARGAUTOS_URL`); nunca inventa montos. |
+| Chatbot | LangChain (langchaingo en el backend Go), conectado a la API del sistema y a un LLM provisto por **Google AI Gemini en la nube** (`PROVEEDOR_LLM=googleai`, modelos `MODELO_CHATBOT` y `MODELO_VISION`). La tasación usa valores reales de la Guía Oficial de Precios de la CCA vía API de ArgAutos (`ARGAUTOS_URL`); nunca inventa montos. |
 | Infra | Docker + Docker Compose para desarrollo local. Git. |
 
 **Regla:** no agregar dependencias fuera de este stack sin autorización.
@@ -199,12 +199,16 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   franja contra `FranjasDisponibles`, genera un **código único** (verificado con
   `CodigoExiste`) y pasa la tasación a `confirmada`; la respuesta le indica al
   cliente que al presentarse diga que quiere terminar de tasar y exhiba el código.
-- **Proveedores**: por defecto **Google AI Gemini en la nube** (`googleai`,
-  clave `GOOGLE_API_KEY`, modelo `gemini-flash-lite-latest`: contexto 1M de
-  tokens, texto + visión, free tier sin tarjeta). Si no hay clave o se setea
-  `PROVEEDOR_LLM=ollama`, usa **Ollama local** (modelos `MODELO_CHATBOT`/
-  `MODELO_VISION`). `NuevoChatbotService` en `chatbot.go` despacha según el
-  proveedor; `PROVEEDOR_LLM` vacío auto-elige googleai si hay `GOOGLE_API_KEY`.
+- **Proveedor**: por defecto y único soportado **Google AI Gemini en la nube**
+  (`googleai`, clave `GOOGLE_API_KEY`, modelo `gemini-3.5-flash-lite`: contexto
+  1M de tokens, texto + visión, free tier sin tarjeta). `NuevoChatbotService`
+  en `chatbot.go` usa siempre este proveedor; `PROVEEDOR_LLM` vacío auto-elige
+  googleai. Los errores transitorios de Gemini (503 UNAVAILABLE por alta
+  demanda, 429 de cuota y otros 5xx) se reintentan con espera exponencial
+  (`MaximosReintentosGoogleAI` en `chatbot.go`). El alias
+  `gemini-flash-lite-latest` y los `gemini-2.5.*` se evitan como default: el
+  primero puede saturarse (503) y los segundos devuelven 404 para cuentas
+  nuevas.
 - **Tasación con valores reales**: el modelo de visión solo *identifica* el
   vehículo (JSON `{marca, modelo, anio, estado, kilometraje}`); el monto lo
   compone el código (`precios.go`) con el valor oficial de la **Guía de la CCA**
@@ -219,7 +223,7 @@ El backlog completo con el estado de cada CU está en `docs/roadmap.md`.
   contexto servido y los devuelve como `vehiculosMencionados`; el widget muestra
   chips "Ver ficha" hacia `/catalogo/:id`. Los marcadores nunca llegan al texto
   visible ni al historial que reenvía el frontend.
-- **Fallback**: si el proveedor LLM está caído (Gemini u Ollama), chat y
+- **Fallback**: si el proveedor LLM (Gemini) está caído, chat y
   tasación devuelven `200` con un mensaje en español que orienta al usuario (el
   error interno se loguea con `slog`).
 
@@ -345,10 +349,10 @@ docker compose down
 Ver `.env.example`. Para levantar local, copiar a `.env` y ajustar.
 El backend requiere: conexión a PostgreSQL (`BD_*`), puerto (`PUERTO_API`) y
 secreto JWT (`JWT_SECRETO`). El frontend usa `VITE_API_URL` para apuntar a la API.
-Para el chatbot: `PROVEEDOR_LLM`, `GOOGLE_API_KEY` (Gemini en la nube, gratis en
-Google AI Studio), `OLLAMA_URL` (respaldo local), `MODELO_CHATBOT`,
-`MODELO_VISION` (modelos a descargar con `ollama pull` si usás local) y
-`ARGAUTOS_URL` (fuente de precios de la CCA). Para el login con Google
+Para el chatbot: `PROVEEDOR_LLM` (googleai, único soportado),
+`GOOGLE_API_KEY` (Gemini en la nube, gratis en Google AI Studio),
+`MODELO_CHATBOT`, `MODELO_VISION` y `ARGAUTOS_URL` (fuente de precios de la
+CCA). Para el login con Google
 (CU-11): `GOOGLE_CLIENT_ID` (client ID OAuth "Aplicación web" con el origen
 del frontend autorizado; vacío = deshabilitado) y `GOOGLE_CLIENT_SECRET`
 (reservado, no requerido por el flujo actual).
@@ -357,11 +361,7 @@ del frontend autorizado; vacío = deshabilitado) y `GOOGLE_CLIENT_SECRET`
 están definidas** en `.env` (no hay defaults inseguros). Los puertos publicados
 quedan en loopback (127.0.0.1) y los contenedores corren no-root con
 `cap_drop: [ALL]` y `read_only` donde la imagen lo permite (ver
-`docker-compose.yml`). El backend usa el **Ollama nativo del host**
-(`OLLAMA_URL=http://host.docker.internal:11434`) por defecto: no duplica
-modelos ni procesos. Si se prefiere Ollama en contenedor (con `gpus: all`,
-requiere NVIDIA Container Toolkit; sin toolkit quitar ese bloque para CPU),
-levantarlo con `docker compose --profile ollama-contenedor up -d`.
+`docker-compose.yml`).
 
 El MCP de GitHub (configurado en `.opencode/opencode.json`) autentica con un
 PAT vía `{env:GITHUB_TOKEN}`. Como opencode resuelve las variables de entorno

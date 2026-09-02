@@ -1,6 +1,12 @@
 package services
 
-import "testing"
+import (
+	"errors"
+	"testing"
+
+	"github.com/tmc/langchaingo/llms"
+	"google.golang.org/api/googleapi"
+)
 
 func TestNormalizarRespuestaConversacionalQuitaMarkdown(t *testing.T) {
 	respuesta := "```markdown\n## Toyota Corolla\n\n**Precio:** $20.000\n- Año 2022\n- [Ver ficha](https://ejemplo.com/ficha)\n```"
@@ -53,5 +59,29 @@ func TestFiltrarIdsServidosDescartaFueraDeContexto(t *testing.T) {
 	}
 	if obtenidos := filtrarIdsServidos([]uint{3}, nil); obtenidos != nil {
 		t.Fatalf("se esperaba nil sin contexto: %v", obtenidos)
+	}
+}
+
+func TestEsErrorTransitorioGoogleAI(t *testing.T) {
+	casos := []struct {
+		nombre  string
+		err     error
+		esperado bool
+	}{
+		{"503 de la API de Google", &googleapi.Error{Code: 503}, true},
+		{"429 por cuota", &googleapi.Error{Code: 429}, true},
+		{"500 interno", &googleapi.Error{Code: 500}, true},
+		{"400 por pedido inválido", &googleapi.Error{Code: 400}, false},
+		{"403 por permisos", &googleapi.Error{Code: 403}, false},
+		{"404 modelo no disponible", &googleapi.Error{Code: 404}, false},
+		{"mapeado por langchaingo como proveedor no disponible", llms.NewError(llms.ErrCodeProviderUnavailable, "googleai", "Google AI service temporarily unavailable"), true},
+		{"desconocido no se reintenta", errors.New("otro error cualquiera"), false},
+	}
+	for _, caso := range casos {
+		t.Run(caso.nombre, func(t *testing.T) {
+			if obtenido := esErrorTransitorioGoogleAI(caso.err); obtenido != caso.esperado {
+				t.Fatalf("esErrorTransitorioGoogleAI(%v) = %v, se esperaba %v", caso.err, obtenido, caso.esperado)
+			}
+		})
 	}
 }

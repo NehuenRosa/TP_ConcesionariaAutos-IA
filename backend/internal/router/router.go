@@ -66,7 +66,7 @@ func Nuevo(base *gorm.DB, configuracion config.Configuracion) *gin.Engine {
 	servicioPrecios := services.NuevoServicioPrecios(configuracion.ArgAutosURL)
 	repositorioTasaciones := repositories.NuevoTasacionRepository(base)
 	repositorioCotizaciones := repositories.NuevoCotizacionRepository(base)
-	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, repositorioTasaciones, repositorioCotizaciones, cifrador, configuracion.ProveedorLLM, configuracion.GoogleAIKey, configuracion.OllamaURL, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
+	servicioChatbot := services.NuevoChatbotService(repositorioVehiculos, repositorioTasaciones, repositorioCotizaciones, cifrador, configuracion.ProveedorLLM, configuracion.GoogleAIKey, configuracion.ModeloChatbot, configuracion.ModeloVision, servicioPrecios)
 	handlerChatbot := handlers.NuevoChatbotHandler(servicioChatbot)
 
 	servicioCotizaciones := services.NuevoCotizacionService(repositorioCotizaciones, repositorioVehiculos, cifrador, servicioChatbot)

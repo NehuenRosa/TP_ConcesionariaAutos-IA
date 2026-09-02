@@ -12,17 +12,16 @@ metadata:
 Documentación operativa del chatbot (CU-10, **Resuelto**). La fuente de verdad de
 requisitos es `openspec/specs/chatbot-asistente/spec.md` y el contexto general
 del proyecto está en `AGENTS.md`. Respetar el stack (Go + langchaingo + Gemini
-en la nube, con Ollama local de respaldo; React + Vite + TS) y el idioma (todo
-en español).
+en la nube; React + Vite + TS) y el idioma (todo en español).
 
 ## Arquitectura
 
 | Capa | Archivo | Responsabilidad |
 |------|---------|-----------------|
-| Service | `backend/internal/services/chatbot.go` | Lógica del asistente: `Responder`, `Tasacion`, contexto de stock, generación con `NuevoChatbotService` (despacha por proveedor: `generarConGoogleAI` → Gemini en la nube, `generarConOllama` → local). |
+| Service | `backend/internal/services/chatbot.go` | Lógica del asistente: `Responder`, `Tasacion`, contexto de stock, generación con `NuevoChatbotService` (usa `generarConGoogleAI` → Gemini en la nube). |
 | Service | `backend/internal/services/precios.go` | `ServicioPrecios`: valores reales de la Guía de la CCA vía API de ArgAutos, con caché. |
 | Handler | `backend/internal/handlers/chatbot.go` | Parseo multipart/JSON y respuestas HTTP de los endpoints. |
-| Config | `backend/internal/config/config.go` | `PROVEEDOR_LLM`, `GOOGLE_API_KEY`, `OLLAMA_URL`, `MODELO_CHATBOT`, `MODELO_VISION`, `ARGAUTOS_URL`. Defaults por proveedor: googleai → `gemini-flash-lite-latest` (chat + visión); ollama → `llama3` / `minicpm-v`. |
+| Config | `backend/internal/config/config.go` | `PROVEEDOR_LLM`, `GOOGLE_API_KEY`, `MODELO_CHATBOT`, `MODELO_VISION`, `ARGAUTOS_URL`. Defaults: `gemini-3.5-flash-lite` (chat + visión). |
 | Router | `backend/internal/router/router.go` | Registra `POST /api/chatbot/mensajes` y `POST /api/chatbot/tasacion` (públicos) e inyecta `ServicioPrecios`. |
 | Frontend | `frontend/src/components/Chatbot.tsx` | Widget flotante (chat + fotos). |
 | Frontend | `frontend/src/services/api.ts` | Cliente HTTP con timeout (`TIEMPO_MAXIMO_MILISEGUNDOS = 140000`) vía `AbortController`. |
@@ -57,19 +56,20 @@ código con la referencia oficial. Un cambio de prompt NO debe alterar esto.
 
 ## Fallback y degradación
 
-- Proveedor LLM caído (Gemini u Ollama) → chat y tasación devuelven `200` con
+- Proveedor LLM (Gemini) caído → chat y tasación devuelven `200` con
   mensaje en español que orienta (catálogo / concesionaria). El error interno se
   loguea con `slog`.
-- Sin `GOOGLE_API_KEY` y `PROVEEDOR_LLM` vacío → el backend elige `googleai`
-  solo si hay clave; si no, cae a `ollama` (`config.go`).
+- Sin `GOOGLE_API_KEY`, el backend igual elige `googleai` (único proveedor
+  soportado) y el fallback (`200` con mensaje) cubre la falta de clave o de
+  conectividad (`config.go`).
 - Vehículo no identificado o sin valor oficial → respuesta honesta, sin inventar.
 
 ## Límites y constantes clave
 
 `LargoMaximoMensaje = 1000`, `MaximoTurnosHistorial = 10`,
 `MaximoImagenesTasacion = 5`, `MaximoPesoImagenBytes = 5 MiB`,
-`TimeoutChatbot = TimeoutVision = 120 s`, `NumCtxChatbot = 4096`,
-`NumCtxVision = 2048`. El historial que se reenvía al LLM se recorta a los
+`TimeoutChatbot = TimeoutVision = 120 s`, `MaxTokensSalida = 600`.
+El historial que se reenvía al LLM se recorta a los
 últimos 10 turnos (`aTurnosChat` no aplica domador) tanto en el backend como en
 el widget (`MAX_TURNOS_HISTORIAL = 10` en `Chatbot.tsx`). En el frontend:
 `TIEMPO_MAXIMO_MILISEGUNDOS = 140000` y
@@ -78,28 +78,19 @@ extensión aunque el MIME venga vacío).
 
 ## Cómo probar en local (Windows/PowerShell)
 
-**Gemini (nube, recomendado)**: con `GOOGLE_API_KEY` seteada en el entorno (o en
-`.env` del compose), no hace falta Ollama; el proveedor resuelve a `googleai` y
-usa `gemini-flash-lite-latest` (texto + visión). Verificar la clave en el
+**Gemini (nube)**: con `GOOGLE_API_KEY` seteada en el entorno (o en
+`.env` del compose), el proveedor resuelve a `googleai` y
+usa `gemini-3.5-flash-lite` (texto + visión). Verificar la clave en el
 contenedor: `docker compose exec backend env | Select-String GOOGLE`.
 
-Backend local con envs explícitos (importante: `.env` puede declarar un
-`MODELO_VISION` que no esté descargado; setear los modelos reales):
+Backend local con envs explícitos (setear los modelos reales):
 
 ```powershell
 # detener y levantar el backend en segundo plano
 $pidApi = (Get-NetTCPConnection -LocalPort 8080).OwningProcess; Stop-Process -Id $pidApi -Force
-$env:PROVEEDOR_LLM='ollama'; $env:OLLAMA_URL='http://localhost:11434'; $env:MODELO_CHATBOT='llama3'; $env:MODELO_VISION='minicpm-v'
+$env:PROVEEDOR_LLM='googleai'; $env:GOOGLE_API_KEY='TU-CLAVE'; $env:MODELO_CHATBOT='gemini-3.5-flash-lite'; $env:MODELO_VISION='gemini-3.5-flash-lite'
 Start-Process -FilePath "$env:TEMP\concesionaria-api.exe" -WorkingDirectory (Get-Location) -RedirectStandardOutput "$env:TEMP\concesionaria-backend.log" -RedirectStandardError "$env:TEMP\concesionaria-backend-err.log" -WindowStyle Hidden
 ```
-
-Para probar el proveedor googleai localmente sin compose:
-
-```powershell
-$env:PROVEEDOR_LLM='googleai'; $env:GOOGLE_API_KEY='TU-CLAVE'; Remove-Item Env:\OLLAMA_URL
-```
-
-Verificar modelos disponibles en Ollama: `Invoke-RestMethod http://localhost:11434/api/tags`.
 
 E2E de tasación con valores reales:
 
@@ -115,13 +106,16 @@ El widget se prueba en `http://localhost:5173` (frontend Vite).
 - **"US$ US$" duplicado** (bug ya corregido): al componer con el precio USD se
   formateaba la moneda dos veces; usar `formatearUSD`/`formatearARS` que ya
   incluyen el símbolo y NO anteponer el símbolo manualmente.
-- **Modelo de visión (Ollama)**: `MODELO_VISION` del `.env` (ej. `llama3.2-vision`)
-  puede no estar descargado; verificar con `/api/tags` y setear el modelo real
-  (`minicpm-v`) al correr. `ollama` CLI no está en PATH en Windows. Con Gemini
-  no aplica: un solo modelo (`gemini-flash-lite-latest`) cubre texto + visión.
+- **Modelo de visión (Gemini)**: un solo modelo (`gemini-3.5-flash-lite`) cubre
+  texto + visión; no hace falta descargar ningún modelo local.
 - **Modelos Gemini 2.x deprecados**: `gemini-2.5-flash-lite` y `gemini-2.5-flash`
-  devuelven `404 no longer available to new users`. Usar siempre el alias
-  `gemini-flash-lite-latest` (resuelve al gemini más liviano actual, gratis).
+  devuelven `404 no longer available to new users`. El default del repo usa la
+  versión estable `gemini-3.5-flash-lite` (texto + visión, gratis).
+- **503 UNAVAILABLE por alta demanda**: el alias `gemini-flash-lite-latest` (y a
+  veces cualquier modelo) responde `503` "This model is currently experiencing
+  high demand" en picos. El backend reintenta esos errores transitorios (503, 429
+  y otros 5xx) con espera exponencial (`MaximosReintentosGoogleAI`); si persisten,
+  devuelve el fallback en español. Los `gemini-2.5.*` NO son alternativa (404).
 - **Fotos sin MIME**: algunos navegadores reportan `file.type === ''`; el
   frontend acepta por extensión para no bloquear la tasación.
 - **Colgado en "pensando"**: si una petición tarda demasiado, el cliente aborta
